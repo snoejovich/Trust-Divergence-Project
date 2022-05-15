@@ -1,0 +1,256 @@
+---
+title: "(S2) Evaluation of Individual Measures of Trust"
+output: html_notebook
+---
+
+## Graph Group: S2: Mean Trust vs. Individual Measures (propensity, self-efficacy, complacency) & Difference in trust against individual measures such as propensity, efficacy, and complacency 
+
+I found that there was no correlation in the data between the individual measures and mean trust values of participants. This refutes the idea that high trusters will have higher trust throughout the experiment and that low trusters will have lower trust throughout the experiment. 
+
+I found that there was no relationship between the individual measures and differences in trust. This refutes the idea that individuals with higher propensity, efficacy and complacency will have higher drops in trust in relationship with respect to people with lower levels of trust. 
+
+```{r}
+comp = f.df %>%
+  group_by(ID, reliability) %>%
+  dplyr::select(complacency_value, mean_trust_value, reliability) %>%
+  summarise(complacency_value, trust = mean(mean_trust_value, na.rm = TRUE), reliability) %>%
+  distinct()
+
+eff = f.df %>%
+  group_by(ID, reliability) %>%
+  dplyr::select(efficacy_value, mean_trust_value, reliability) %>%
+  summarise(efficacy_value,trust = mean(mean_trust_value, na.rm = TRUE),reliability) %>%
+  distinct()
+
+prop = f.df %>%
+  group_by(ID, reliability) %>%
+  dplyr::select(propensity_value, mean_trust_value, reliability) %>%
+  summarise(propensity_value, trust = mean(mean_trust_value, na.rm = TRUE), reliability) %>%
+  distinct()
+
+rel= f.df %>%
+  group_by(ID) %>%
+  dplyr::select(reliability, mean_trust_value, reliability) %>%
+  summarise(reliability, trust = mean(mean_trust_value, na.rm = TRUE)) %>%
+  distinct()
+
+exp= f.df %>%
+  group_by(ID) %>%
+  dplyr::select(exposure, mean_trust_value) %>%
+  summarise(exposure, trust = mean(mean_trust_value, na.rm = TRUE)) %>%
+  distinct()
+
+
+lcomp.plot = ggplot(comp, aes(complacency_value, trust))  +
+  #facet_grid(~reliability) +
+  geom_point() +
+  coord_equal(xlim = c(2,7), ylim = c(2,7)) +  
+  geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  + 
+  ylab("mean trust value")
+
+# 
+# ggplot(df,aes(x = wt, y = hp)) + 
+#   geom_point() + 
+#   geom_smooth(method = "lm", se=FALSE) +
+#   geom_text(x = 2, y = 300, label = eq(df$wt,df$hp), parse = TRUE)
+
+ecomp.plot = ggplot(eff, aes(efficacy_value, trust))  +
+  #facet_grid(~reliability) +
+  geom_point() +
+  coord_equal(xlim = c(2,7), ylim = c(2,7)) +  
+  geom_smooth(method='lm', se = FALSE) +
+  stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  + 
+  ylab("mean trust value")
+
+tcomp.plot = ggplot(prop, aes(propensity_value, trust))  +
+  #facet_grid(~reliability) +
+  geom_point() +
+  coord_equal(xlim = c(2,7), ylim = c(2,7)) +  
+  geom_smooth(method='lm', se = FALSE) +
+  stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  + 
+  ylab("mean trust value")
+
+change.df = f.df %>% 
+  group_by(ID, reliability, propensity_value) %>%
+  summarise(trust = mean(mean_trust_value, na.rm = TRUE), ID, reliability, propensity_value, complacency_value, efficacy_value) %>%
+  distinct() %>%
+  pivot_wider(names_from = reliability, values_from = trust) %>%
+  mutate(trust_diff = high-low)
+
+#change.df
+
+changep.plot = ggplot(change.df, aes(propensity_value, trust_diff)) +
+  geom_point() +
+     geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               ) 
+
+changec.plot = ggplot(change.df, aes(complacency_value, trust_diff)) +
+  geom_point() +
+   geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               ) 
+
+changeE.plot = ggplot(change.df, aes(efficacy_value, trust_diff)) +
+  geom_point() +
+    geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               ) 
+#no correlation between propensity and drop in trust 
+
+
+lcomp.plot
+ecomp.plot
+tcomp.plot
+changep.plot
+changec.plot
+changeE.plot
+
+```
+
+
+## Individual Measures vs. Mean Trust Values in High/Low Reliability Conditions 
+
+Nothing any different from the above results, but was helpful for confirming that there is no relationship even in the interactions with the reliability.
+
+```{r}
+comp = f.df %>%
+  group_by(ID, reliability) %>%
+  select(complacency_value, mean_trust_value, reliability) %>%
+  summarise(complacency_value, trust = mean(mean_trust_value, na.rm = TRUE), reliability) %>%
+  distinct()
+
+eff = f.df %>%
+  group_by(ID, reliability) %>%
+  select(efficacy_value, mean_trust_value, reliability) %>%
+  summarise(efficacy_value,trust = mean(mean_trust_value, na.rm = TRUE),reliability) %>%
+  distinct()
+
+prop = f.df %>%
+  group_by(ID, reliability) %>%
+  select(propensity_value, mean_trust_value, reliability) %>%
+  summarise(propensity_value, trust = mean(mean_trust_value, na.rm = TRUE), reliability) %>%
+  distinct()
+
+rel= f.df %>%
+  group_by(ID) %>%
+  select(reliability, mean_trust_value, reliability) %>%
+  summarise(reliability, trust = mean(mean_trust_value, na.rm = TRUE)) %>%
+  distinct()
+
+exp= f.df %>%
+  group_by(ID) %>%
+  select(exposure, mean_trust_value) %>%
+  summarise(exposure, trust = mean(mean_trust_value, na.rm = TRUE)) %>%
+  distinct()
+
+hcomp.plot = ggplot(comp, aes(complacency_value)) + geom_histogram(bins = 20) +
+  labs(title = "Histogram of Complacency Measure") + xlim(c(0,7)) 
+
+heff.plot = ggplot(eff, aes(efficacy_value)) + geom_histogram(bins = 20) +
+  labs(title = "Histogram of Efficacy Measure") + xlim(c(0,7)) 
+
+hprop.plot = ggplot(prop, aes(propensity_value)) + geom_histogram(bins = 20) +
+  labs(title = "Histogram of Propensity Measure") +  xlim(c(0,7))  
+
+#hcomp.plot/ heff.plot /hprop.plot 
+
+
+lcomp.plot = ggplot(comp, aes(complacency_value, trust))  +
+  facet_grid(~reliability) +
+  geom_point() +
+  coord_equal(xlim = c(2,7), ylim = c(2,7)) +  
+     geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               ) 
+  ylab("mean trust")
+
+# 
+# ggplot(df,aes(x = wt, y = hp)) + 
+#   geom_point() + 
+#   geom_smooth(method = "lm", se=FALSE) +
+#   geom_text(x = 2, y = 300, label = eq(df$wt,df$hp), parse = TRUE)
+
+ecomp.plot = ggplot(eff, aes(efficacy_value, trust))  +
+  facet_grid(~reliability) +
+  geom_point() +
+  coord_equal(xlim = c(2,7), ylim = c(2,7)) +  
+     geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               ) 
+  ylab("mean trust")
+
+tcomp.plot = ggplot(prop, aes(propensity_value, trust))  +
+  facet_grid(~reliability) +
+  geom_point() +
+  coord_equal(xlim = c(2,7), ylim = c(2,7)) +  
+     geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               ) 
+  ylab("mean trust")
+
+library(gridExtra)
+
+lcomp.plot
+ecomp.plot
+tcomp.plot
+
+
+#lcomp.plot/ecomp.plot/tcomp.plot
+
+
+ggplot(rel, aes(reliability, trust))  +
+  geom_point() + 
+  geom_violin() +
+  geom_sina() + 
+  ylab("mean trust value")
+
+ggplot(exp, aes(exposure, trust))  +
+  geom_point() +
+  geom_violin() +
+  geom_sina() + 
+  ylab("mean trust value")
+  
+```
+
+## Distribution of Complacency, Efficacy, and Propensity throughout the experiment.
+
+The graphs below show that there were differences in indivudal behavior between participants. 
+
+```{r}
+hcomp.plot = ggplot(comp, aes(complacency_value)) + geom_histogram(bins = 20) +
+  labs(title = "Histogram of Complacency Measure") + xlim(c(0,7)) 
+
+heff.plot = ggplot(eff, aes(efficacy_value)) + geom_histogram(bins = 20) +
+  labs(title = "Histogram of Efficacy Measure") + xlim(c(0,7)) 
+
+hprop.plot = ggplot(prop, aes(propensity_value)) + geom_histogram(bins = 20) +
+  labs(title = "Histogram of Propensity Measure") +  xlim(c(0,7))  
+
+hcomp.plot
+heff.plot
+hprop.plot 
+```
+

@@ -1,0 +1,210 @@
+---
+title: "Alignment Analysis"
+output: html_notebook
+---
+
+```{r}
+
+qualtrics_ID.df = qualtrics.df %>% 
+  group_by(ID) %>%
+  filter(!is.na(Trust_1)) %>%
+  mutate_at(c("Trust_1", "Trust_2","Trust_3", "Trust_4", "Trust_5", "Trust_6", "Trust_7", "Trust_8", "Trust_9", "Trust_10", "Trust_11", "Trust_12" ), as.numeric) %>%
+  dplyr::summarise_at(vars("Trust_1", "Trust_2","Trust_3", "Trust_4", "Trust_5", "Trust_6", "Trust_7", "Trust_8", "Trust_9", "Trust_10", "Trust_11", "Trust_12"), list (name=mean))
+
+
+
+qualtrics_ID.df
+
+
+#colMeans(qualtrics_ID.df[sapply(qualtrics_ID.df, is.numeric)])
+
+```
+
+
+
+```{r}
+library(ltm)
+data = qualtrics_ID.df %>%
+  #filter(!is.na(mean_trust_value)) %>%
+  dplyr::select(Trust_1_name:Trust_5_name)
+samp = data.matrix(data)
+cronbach.alpha(samp)
+```
+
+```{r}
+data = qualtrics_ID.df %>%
+  #filter(!is.na(mean_trust_value)) %>%
+  dplyr::select(Trust_6_name:Trust_12_name)
+samp = data.matrix(data)
+cronbach.alpha(samp)
+```
+
+```{r}
+QP_NA.df$align = if_else(QP_NA.df$correct_procedure == QP_NA.df$selected_procedure, 1, 0)
+  
+QP_NA.df
+```
+
+
+#graph of alginment 
+```{r}
+
+align.df = f.df %>%
+  filter(!is.na(mean_trust_value))
+
+
+align.df$align = if_else(align.df$correct_procedure == align.df$selected_procedure, "aligned", "not aligned")
+align.df$align = as.factor(align.df$align)
+
+align_group.df = align.df %>%
+  group_by(align, event, reliability, exposure) %>%
+  #filter(!is.na(mean_trust_value)) %>%
+  summarise_at(vars("mean_trust_value"), mean)
+  #summarise_at()
+
+
+
+align_group.df
+```
+
+
+
+```{r}
+align_group.df %>%
+  filter(reliability == "low") %>%
+  filter(event == "Shutdown") %>%
+  filter(exposure == "1") 
+  
+```
+
+
+```{r}
+
+#source: https://stackoverflow.com/questions/59545834/highlighting-one-of-my-line-graphs-in-ggplot
+#colors = rainbow(5)
+experiment.plot = ggplot(align_group.df, aes(interaction(event, exposure, reliability), mean_trust_value)) +
+  #facet_grid(cols = vars(reliability))+
+  #geom_violin(colour = "grey30", fill = "grey95", draw_quantiles = c(0.25, 0.5, 0.75)) +
+  #geom_violin(colour = "grey90", fill = "NA", draw_quantiles = TRUE) +
+  #geom_sina(colour = "grey55", size = 0.4, alpha = 0.8) +
+  geom_line(aes(group = align, color = align)) +
+  labs( x = "Experimental Condition", y = "Mean Trust Value") +
+  #scale_x_discrete(limits=c("Startup", "venting", "Shutdown"))+
+  ggtitle("Effect of Event, Exposure, and Reliability vs. Mean Trust Value") +
+  guides(x = "axis_nested") #+
+  #scale_color_identity()
+  #geom_miss_point() +
+  # geom_point(data = subset(df,  ID == "5"),color = colors[3]) +
+  # geom_line(data = subset(df,  ID == "5"),color = colors[3]) 
+  
+  experiment.plot
+
+
+```
+
+
+```{r}
+align.df
+```
+
+
+## Linear Mixed Effect Model on alignment to mean trust value and SE
+```{r}
+
+align.lame = lme4::lmer(mean_trust_value ~ align + (1|ID),
+   data = align.df)
+
+base.lame = lme4::lmer(mean_trust_value ~ (1|ID),
+   data = ersamp.df)
+
+BEST.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + (reliability|ID),
+data = ersamp.df)
+
+
+compare_performance(align.lame, base.lame, BEST.lame)
+
+```
+
+
+```{r}
+alignS.lame = lme4::lmer(SSE_1~ align + (1|ID),
+   data = align.df)
+
+alignS2.lame = lme4::lmer(SSE_1~  reliability*exposure + (align|ID),
+   data = align.df)
+
+baseS.lame = lme4::lmer(SSE_1 ~ (1|ID),
+   data = ersamp.df)
+
+BESTS.lame = lme4::lmer(SSE_1 ~ reliability*exposure + (reliability|ID),
+data = ersamp.df)
+
+
+compare_performance(alignS.lame, alignS2.lame,baseS.lame, BEST.lame)
+```
+
+
+
+
+
+
+
+
+## see if difference in the alignment of the groups is statistically different 
+
+### I used the Welch 2-sample t-test since sample sizes are different and the variances are unkown 
+```{r}
+
+t.test(mean_trust_value~align, data = align_group.df)
+
+
+## assumptions to check include: scale of measurement, random sampling, normality of data distribution, adequacy of sample size, equal variance (I think overlooked with welch two sample)
+
+## test for iid (identically distributed and independent)
+library(lmtest)
+
+
+# calculate the ACF for lags between 1 and 20 (inclusive)
+autocorrelation <- acf(align_group.df, lag.max=20, plot=FALSE)
+
+# Plot figure
+plot(autocorrelation,
+     main="Autocorrelation",
+     xlab="Lag Parameter",
+     ylab="ACF")
+
+```
+
+
+```{r}
+var.test(mean_trust_value~align, data = align_group.df)
+
+
+
+```
+
+```{r}
+mylogit <- glm(align ~ mean_trust_value + exposure + event + reliability, data = align_group.df, family = "binomial")
+
+summary(mylogit)
+
+
+```
+
+```{r}
+mylogit <- glm(mean_trust_value~ align + exposure + event + reliability, data = align_group.df, family = "gaussian")
+
+summary(mylogit)
+
+## having the intercept be significant I thnk means that the mean trust value is not zero, so it is somewhat predictable in value
+```
+
+
+
+
+```{r}
+mylogit <- glm(align ~ mean_trust_value + exposure + event + reliability, data = align.df, family = "binomial")
+
+summary(mylogit)
+```
+

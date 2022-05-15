@@ -1,0 +1,107 @@
+---
+title: "(S3) Slope/BLUP"
+output: html_notebook
+---
+
+
+## S3: Compare BLUP to individual measures of complacency and propensity
+
+The purpose of this section is to investigate if the slope and intercept effect from the previous mixed linear effect models accounts for individual differences such as propensity and complacency. The graph below compares the Best Linear Unbiased Prediction (BLUP) of the Random Effects from the Normal Linear Mixed Effects Model to the propensity and complacency of individuals in the experiment. The model used for the BLUP was taken from the mixed effect mode from S1 that determined "mean_trust_value ~ reliability*exposure +  (reliability|ID)" to be the optimal model .The purpose of using this graph was to determine if the BLUP was accounting for the individual differences as seen by propensity and complacency because the model was not able to identify those individual differences as significant. While there is a slight linear correlation between trust and propensity and trust and BLUPS, the linear correlation is too weak to draw any strong relationships. The complacency value does not seem to be correlated with trust or BLUPs suggesting that complacency is not representative of the slope effect. 
+
+```{r}
+
+formula <- y ~ x
+
+trust.df = f.df %>%
+   group_by(ID)%>%
+   summarise(mean_trust_value = mean(mean_trust_value, na.rm = TRUE))
+
+complacency.df = f.df %>%
+   group_by(ID) %>%
+   dplyr::select(complacency_value) %>%
+   distinct(complacency_value)
+ 
+propensity.df= f.df %>%
+   group_by(ID) %>%
+   dplyr::select(propensity_value) %>%
+   distinct(propensity_value)
+ 
+ 
+ names(complacency.df)[2] = paste("complacency_score")
+names(propensity.df)[2] = paste("propensity_score")
+
+ #names(tc.df)[3] = paste("complacency_score")
+
+ tc.df = left_join(trust.df, complacency.df, by = "ID")
+ td.df = left_join(trust.df, propensity.df, by = "ID")
+ 
+
+# ggplot(tc.df, aes(complacency_score,mean_trust_value, asp = 1)) +
+#  geom_point() +
+#    coord_equal(xlim = c(2,7), ylim = c(2,7)) +
+#    geom_smooth(method='lm', se = FALSE) +
+#    stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+#                formula = formula, parse = TRUE,
+#                label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+#                )  + 
+#    ylab("Mean Trust Value") +
+#   ggtitle("Complacency vs. Mean Trust Value")
+# 
+# 
+# 
+# ggplot(td.df, aes(propensity_score,mean_trust_value, asp = 1)) +
+#  geom_point() +
+#    coord_equal(xlim = c(2,7), ylim = c(2,7)) + 
+#    geom_smooth(method='lm', se = FALSE) +
+#    stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+#                formula = formula, parse = TRUE,
+#                label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+#                )  + 
+#    ylab("Mean Trust Value") +
+#   ggtitle("Propensity vs. Mean Trust Value")
+
+MLC.lame = lme4::lmer(mean_trust_value ~ reliability*exposure +  (reliability|ID),
+    data = f.df) #best model with lowest AIC and keeping RMSE low
+
+
+BLUP.df = coef(MLC.lame)$ID
+
+BLUP.df <- tibble::rownames_to_column(BLUP.df, "ID")
+
+BLUPc.df = left_join(BLUP.df, complacency.df, by = "ID")
+
+BLUPp.df = left_join(BLUP.df, propensity.df, by = "ID")
+
+names(BLUPc.df)[2] = paste("Intercept")
+names(BLUPp.df)[2] = paste("Intercept")
+
+ggplot(BLUPc.df, aes(complacency_score, Intercept)) +
+geom_point() +
+coord_equal(xlim = c(2,6), ylim = c(2,6)) +
+geom_smooth(method='lm', se = FALSE) +
+stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  + 
+xlab("complacency_score") +
+ylab("Intercapt: (reliability|ID)") +
+ggtitle("Complacency vs. BLUP")
+
+ggplot(BLUPp.df, aes(propensity_score, Intercept)) +
+geom_point() +
+coord_equal(xlim = c(2,6), ylim = c(2,6)) +
+   geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  + 
+xlab("propensity_score") +
+ylab("Intercapt: (reliability|ID)") +
+ggtitle("Propensity vs. BLUP")
+
+```
+
+
+
+
+

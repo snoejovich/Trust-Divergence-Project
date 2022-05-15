@@ -1,0 +1,168 @@
+---
+title: "(S4) Experiment Overview"
+output: html_notebook
+---
+## S4: Overview of trust throughout the experiment
+
+## Graph 1: The plot below gives a timeline of the experiment. The plot shows mean trust value per participant across the different conditions for exposure, reliability, and different events. The plot shows that there might be different groups of individuals in how they respond to trust based on their slopes. Other noteable features inlcude that the data becomes more sparse throughout the experiment. Also significant is the biomodality that exists in the data. This signifies there may groupings of individuals of how they respond and interact to different conditions of trust. It is also interesting that the trust increases more in the high reliability exposure 2 trial in comparison to the low reliability exposure 2 trial. MOreover, it is interesting to note that NAs become more apparent and data becomes sparse towards the end of the study. 
+
+```{r}
+f.df
+```
+
+```{r}
+ggplot(f.df, aes(interaction(event, exposure, reliability), mean_trust_value, color = ID)) +
+  #facet_grid(cols = vars(reliability))+
+  #geom_violin(colour = "grey30", fill = "grey95", draw_quantiles = c(0.25, 0.5, 0.75)) +
+  #geom_violin(colour = "grey90", fill = "NA", draw_quantiles = TRUE) +
+  #geom_sina(colour = "grey55", size = 0.4, alpha = 0.8) +
+  geom_line(aes(group = ID)) +
+  labs( x = "Interaction of Event and Exposure", y = "Mean Trust Value") +
+  #scale_x_discrete(limits=c("Startup", "venting", "Shutdown"))+
+  ggtitle("Effect of Event, Exposure, and Reliability vs. Mean Trust Value") +
+  guides(x = "axis_nested") 
+```
+
+
+
+```{r}
+colors = rainbow(5)
+df <- f.df%>% 
+  mutate(Color = ifelse(ID == "1", colors[1], ifelse(ID == "4", colors[4], ifelse(ID == "2", colors[5], "black"))))
+                     
+df
+```
+
+
+```{r}
+#source: https://stackoverflow.com/questions/59545834/highlighting-one-of-my-line-graphs-in-ggplot
+colors = rainbow(5)
+experiment.plot = ggplot(df, aes(interaction(event, exposure, reliability), mean_trust_value, color = Color)) +
+  #facet_grid(cols = vars(reliability))+
+  #geom_violin(colour = "grey30", fill = "grey95", draw_quantiles = c(0.25, 0.5, 0.75)) +
+  #geom_violin(colour = "grey90", fill = "NA", draw_quantiles = TRUE) +
+  #geom_sina(colour = "grey55", size = 0.4, alpha = 0.8) +
+  geom_line(aes(group = ID)) +
+  labs( x = "Interaction of Event and Exposure", y = "Mean Trust Value") +
+  #scale_x_discrete(limits=c("Startup", "venting", "Shutdown"))+
+  ggtitle("Effect of Event, Exposure, and Reliability vs. Mean Trust Value") +
+  guides(x = "axis_nested") +
+  scale_color_identity()
+  #geom_miss_point() +
+  # geom_point(data = subset(df,  ID == "5"),color = colors[3]) +
+  # geom_line(data = subset(df,  ID == "5"),color = colors[3]) 
+  
+  experiment.plot
+
+```
+
+
+
+```{r echo = FALSE}
+experiment.plot = ggplot(f.df, aes(interaction(event, exposure, reliability), mean_trust_value)) +
+  #facet_grid(cols = vars(reliability))+
+  #geom_violin(colour = "grey30", fill = "grey95", draw_quantiles = c(0.25, 0.5, 0.75)) +
+  #geom_violin(colour = "grey90", fill = "NA", draw_quantiles = TRUE) +
+  #geom_sina(colour = "grey55", size = 0.4, alpha = 0.8) +
+  geom_line(aes(group = ID)) +
+  labs( x = "Interaction of Event and Exposure", y = "Mean Trust Value") +
+  #scale_x_discrete(limits=c("Startup", "venting", "Shutdown"))+
+  ggtitle("Effect of Event, Exposure, and Reliability vs. Mean Trust Value") +
+  guides(x = "axis_nested") #+
+  #geom_miss_point()
+
+
+bimodal.plot = ggplot(f.df, aes(interaction(exposure,reliability), mean_trust_value)) + 
+  #facet_grid(cols = vars(reliability)) + 
+  geom_violin(colour = "grey30", fill = "grey95", draw_quantiles = c(0.25, 0.5, 0.75)) +
+  geom_violin(colour = "grey90", fill = "NA", draw_quantiles = TRUE) +
+  geom_sina(colour = "grey55", size = 0.4, alpha = 0.8) +
+  labs( x = "Exposure and Reliability", y = "Mean Trust Value") +
+  #scale_x_discrete(limits=c("Startup", "venting", "Shutdown"))+
+  ggtitle("Reliability vs. Mean Trust Value") +
+  guides(x = "axis_nested") 
+
+experiment.plot
+bimodal.plot 
+  
+```
+
+## Investigate the effect of the complexity 
+
+The motivation for looking at complexity came from the participants seeming to respond to the simple complexity scenarios with a lot of confusion. Participants were able to accept that bucky would make a mistake in the recommendation, but seemed to struggle more if it made a mistake with providing the proper status update. However, the graph reveals that the complexity condition of the reliability does not seem to greatly vary within the low reliability trial. 
+
+```{r}
+complexity.df = ggplot(f.df, aes(interaction(complexity,reliability), mean_trust_value)) + 
+  #facet_grid(cols = vars(reliability)) + 
+  geom_violin(colour = "grey30", fill = "grey95", draw_quantiles = c(0.25, 0.5, 0.75)) +
+  geom_violin(colour = "grey90", fill = "NA", draw_quantiles = TRUE) +
+  geom_sina(colour = "grey55", size = 0.4, alpha = 0.8) +
+  labs( x = "Complexity and Reliability", y = "Mean Trust Value") +
+  #scale_x_discrete(limits=c("Startup", "venting", "Shutdown"))+
+  ggtitle("Complexity and Reliability vs. Mean Trust Value") +
+  guides(x = "axis_nested") 
+
+complexity.df 
+```
+
+## Linear correlation between the simple and complex trust scenarios
+
+We investigated if there was a correlation between participant trust values in the simple conditions and complex conditions. There is no correlation in how people react in the none conditions and both condition for complexity. 
+
+```{r}
+
+pivot.df = f.df %>% 
+  pivot_wider(names_from = complexity, values_from = mean_trust_value) %>%
+   group_by(ID, event, exposure) %>%
+   summarise_at(c("none", "both"), mean, na.rm = TRUE)
+#pivot.df 
+
+ggplot(pivot.df, aes(none, both)) +
+  geom_point() + 
+  geom_miss_point(alpha = .8, size = .9) +   
+  ggtitle("Correlation of Trust Per Participant in Simple and Complex Conditions") +
+  labs( x = "Trust (none)", y = "Trust (both)")+ 
+  geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  
+
+
+```
+
+## Creating and Testing of Models
+
+The plots below show how people's trust levels varied in the high and low reliability conditions. There are some trends among the participants, mainly in the shape of their slope. I suggest looking at the differneces between points for individuals to see if there are groupings in how people respond to the trust conditions. 
+
+
+```{r}
+
+#observe that each participant has a varying intercept more or less and a varying slope in their response to the data by some for the reliability 
+
+ggplot(aes(interaction(event, exposure), mean_trust_value, color = reliability), data = f.df) + 
+    geom_point() + 
+  facet_wrap(~ ID) + # create a facet for each mountain range
+  #geom_smooth(method = "lm") + 
+  xlab("Progress in the Experiment") +  
+  ylab("Mean Trust Value")
+
+ggplot(aes(interaction(event, exposure), mean_trust_value, color = complexity), data = f.df) + 
+    geom_point() + 
+  facet_wrap(~ ID) + # create a facet for each mountain range
+  #geom_smooth(method = "lm") + 
+  xlab("Progress in the Experiment") + 
+  ylab("Mean Trust Value")
+
+ggplot(aes(interaction(event, exposure, reliability), mean_trust_value, color = ID), data = f.df) + 
+    geom_point() + 
+  geom_line(aes(group = ID)) + 
+  #geom_smooth(method = "lm") + 
+  xlab("Progress in the Experiment") + 
+  ylab("Mean Trust Value")
+
+```
+
+
+
+

@@ -1,0 +1,49 @@
+---
+title: "Distributional Models "
+output: html_notebook
+---
+
+
+
+## distributional models 
+```{r}
+
+
+trustmodelE.brm = brm(bf(var_trust ~ exposure + (1|ID)), 
+                       data = dis.df)
+
+trustmodelR.brm = brm(bf(var_trust ~ reliability + (1|ID)), 
+                       data = dis.df)
+
+trustmodelER.brm = brm(bf(var_trust ~ exposure*reliability + (1|ID)), 
+                       data = dis.df)
+
+
+loo_3 = loo(trustmodelE.brm)
+loo_5 = loo(trustmodelR.brm)
+loo_6 = loo(trustmodelER.brm)
+
+ 
+
+## Compares models with larger values indicating a better fit
+comparison = loo_compare(loo_3, loo_5, loo_6)
+print(comparison, digits = 2)
+
+
+
+comparison.df = as.data.frame(comparison)
+comparison.df$model = row.names(comparison.df)
+
+ 
+ggplot(comparison.df, aes(x = reorder(model, elpd_loo)))+
+      geom_pointrange(aes(y = elpd_loo, ymin = elpd_loo-se_elpd_loo, 
+                        ymax = elpd_loo+se_elpd_loo)) +
+      labs(x = "") +
+     coord_flip()
+
+```
+
+
+
+
+

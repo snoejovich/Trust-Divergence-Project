@@ -1,0 +1,619 @@
+---
+title: "Mixed Models for Trust and Self Efficacyv + PRIDE and Bucky Errors"
+output: html_notebook
+---
+
+## Definitions 
+```{r}
+## random facotrs: in the parantheses, fixed effects are in the model 
+## variables: event, exposure, reliability, ID, complexity, propensity_trust_value, mean_self_efficacy
+#RMSE:square root variance of the residuals, how close observed data points are to the predicted values. (absolute measure of fit). STandard deviation of unexplained variance. Lower values of RMSE indicate better fit. 
+#R2: Relative measure of fit (scale of 0 to 1). Higher R^2 squared values mean smaller difference between predicted and actual values. 
+# Proprtion of variance explained by the model/ total variance
+#R2 (cond.) describes the proprtion fo variance explaiend by fixed facotrs 
+#R2 (marg.) describes the porprtion of variance explaiend by fixed factors adn random factors
+#AIC: Useful for comparison to other models. Lower AIC indicates a better-fit model. A differnece of more than -2 is considered significantly better than the model it is being compared to. Trade-off between goodness of fit and simplicity of the model 
+#BIC: Estimate of a function of the posterior prob of a model being true. A lower BIC means a model is considered more liekly to be the true model. Measures the complexity of a model 
+#ICC: Intraclass correlation coefficient (ICC) used to determine if items can be related reliabily by different raters. 0 means no reliability among raters, 1 indicating perfect reliability.
+#continous variable cannot be a random effect
+```
+
+
+## Graph 1: Prepare and visualize the data
+```{r}
+library(dplyr)
+
+rel.df = ersamp.df %>%
+  group_by(ID, reliability, exposure, event) %>%
+  dplyr::select(exposure, reliability, ID, mean_trust_value, event) %>%
+  summarise(exposure, reliability, ID, event, mean = mean(mean_trust_value, na.rm = TRUE)) %>%
+  distinct(exposure, reliability, ID, event, mean)
+
+
+comp.df = ersamp.df %>%
+  group_by(ID, reliability, exposure, event, complexity) %>%
+  dplyr::select(exposure, reliability, ID, mean_trust_value, event, complexity) %>%
+  summarise(exposure, reliability, ID, event, complexity, mean = mean(mean_trust_value, na.rm = TRUE)) %>%
+  distinct(exposure, reliability, ID, event, mean, complexity)
+
+ggplot(rel.df, aes(interaction(exposure, reliability), mean))+  
+  ggtitle("Interaction of Exposure and Reliability vs. Mean Trust Value") +
+  geom_violin(colour ="grey90", fill ="grey90")+  
+  geom_sina(colour ="grey55", size =.4)+  
+  theme_light() +
+  ylab("mean trust value")  +
+  guides(x = "axis_nested") 
+  
+
+ggplot(comp.df, aes(interaction(exposure, complexity), mean)) +  
+  ggtitle("Interaction of Exposure and Complexity vs. Mean Trust Value") +
+  geom_violin(colour ="grey90", fill ="grey90") +  
+  geom_sina(colour ="grey55", size =.4)+  
+  theme_light() +
+  ylab("mean trust value") + 
+  guides(x = "axis_nested") 
+
+```
+
+## Graph intercept 
+
+```{r}
+#detach(package:plyr)
+Fig1.df = rel.df %>%
+  group_by(ID) %>%
+   summarise(SD = sd(mean, na.rm = TRUE)) %>%
+  arrange(SD)
+
+top.df = top_n(Fig1.df, 3)
+bottom.df = top_n(Fig1.df, -3)
+
+graph.df = merge(rel.df, Fig1.df)
+
+graph.df$hlight= if_else(graph.df$ID %in% top.df$ID | graph.df$ID %in% bottom.df$ID, 1,0)
+
+top.df
+bottom.df
+
+graph.df$hlight = as.factor(graph.df$hlight)
+
+```
+
+
+
+```{r}
+myColors <- c("#d9d9d9", "#404040")
+ggplot(graph.df, aes(interaction(event,exposure, reliability), mean, color = hlight))+  
+  ggtitle("Interaction of Exposure and Reliability vs. Mean Trust Value") +
+  geom_line(aes(group = ID)) +
+  # geom_violin(colour ="grey90", fill ="grey90")+  
+  # geom_sina(colour ="grey55", size =.4)+  
+  # theme_light() +
+  ylab("mean trust value")  +
+  guides(x = "axis_nested") +
+  scale_color_manual(values=myColors) +
+  theme_light() +
+  theme(legend.title = element_blank(), legend.position = "none", panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+
+
+```
+
+
+## Graph 2: Mixed Model Effects for Mean Trust Value 
+
+Trust Value Models: Which variable would best explain the differences across the participants? 
+Result: Using the reliability and complexity seem to reduce the RMSE and R^2, but the reliability has a lower AIC value, so I decided to proceed with reliability in the model to avoid overfitting. Moreover, the complexity models did not seem to converge. Having the reliability in the slope interaction raises the R2 value from .397 to .68 and including reliability in the model raises it to the .80 range which signifies the importance of these effects. The interpretation of this model is that the slope interaction from reliabiltiy indicates that people's response to trust (whether they go up a little or a lot) is a slope (random effect), but the fixed effect is that they all generally move in the same direction (high to low trust when going from high to low reliability). 
+
+```{r}
+MLID.lame = lme4::lmer(mean_trust_value ~ (1|ID),
+   data = ersamp.df)
+
+MLr.lame = lme4::lmer(mean_trust_value ~ (reliability|ID),
+   data = ersamp.df)
+
+#MLc.lame = lme4::lmer(mean_trust_value ~ (complexity|ID),
+    #data = ersamp.df) #not converging
+#MLcc.lame = lme4::lmer(mean_trust_value ~ complexity + (complexity|ID),
+   #data = ersamp.df)  #not converging
+
+MLrr.lame = lme4::lmer(mean_trust_value ~ reliability + (1|ID),
+   data = ersamp.df) 
+
+MLrr2.lame = lme4::lmer(mean_trust_value ~ reliability + (reliability|ID),
+data = ersamp.df)  #this model produced the best results, but it does not make sense to have a categorical vairable be both fixed and random in a model: muscardinus.be/2017/08/fixed-and-random/#fit-with-lme4
+
+MLree.lame = lme4::lmer(mean_trust_value ~ exposure+ (reliability|ID),
+   data = ersamp.df)
+
+MLree2.lame = lme4::lmer(mean_trust_value ~ exposure*reliability+ (reliability|ID),
+   data = ersamp.df) #this model produced the best results, but it does not make sense to have a categorical vairable be both fixed and random in a model: muscardinus.be/2017/08/fixed-and-random/#fit-with-lme4
+
+MLree3.lame = lme4::lmer(mean_trust_value ~ exposure*reliability+ (1|ID),
+   data = ersamp.df)
+
+trust.table = compare_performance(MLID.lame,MLr.lame,MLrr.lame, MLree.lame , MLrr2.lame, MLree2.lame, MLree3.lame, rank = TRUE)
+trust.table
+
+```
+
+# Adding the errors did not seem to significantly improve the results, only added to the complexity of the model. In fact, R^2 is still relativel yhigh
+```{r}
+
+Base.lame = MLID.lame
+MLrBucky.lame = lme4::lmer(mean_trust_value ~ Pride.Errors.Count + (1|ID),
+   data = ersamp.df)
+MLrPRIDE.lame = lme4::lmer(mean_trust_value ~ Bucky.Errors.Count + (1|ID),
+   data = ersamp.df)
+
+comb.lame = lme4::lmer(mean_trust_value ~ Bucky.Errors.Count*Pride.Errors.Count + reliability*exposure + (reliability|ID),
+   data = ersamp.df)
+
+comb2.lame = lme4::lmer(mean_trust_value ~ Bucky.Errors.Count*Pride.Errors.Count + (reliability|ID),
+   data = ersamp.df)
+
+BEST.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + (reliability|ID),
+data = ersamp.df) 
+
+compare_performance(Base.lame,MLrBucky.lame,MLrPRIDE.lame,BEST.lame, comb.lame, comb2.lame)
+
+```
+
+
+# Filtering for the right error proportions does not seem to improve the outcomes...which means that having more data improves the model more than does filtering data that is not perfect? Or, is it that the imperfect data is skewing information? Should I leave this out? 
+
+
+```{r}
+samp.df = ersamp.df %>%
+  filter(!is.na(Pride.Errors.Count)) %>%
+  filter(!is.na(Bucky.Errors.Count)) 
+
+samp.df
+
+Base.lame = MLID.lame
+MLrBucky.lame = lme4::lmer(mean_trust_value ~ Pride.Errors.Count + (1|ID),
+   data = samp.df)
+MLrPRIDE.lame = lme4::lmer(mean_trust_value ~ Bucky.Errors.Count + (1|ID),
+   data = samp.df)
+
+comb.lame = lme4::lmer(mean_trust_value ~ Bucky.Errors.Count*Pride.Errors.Count + reliability*exposure + (reliability|ID),
+   data = samp.df)
+
+comb2.lame = lme4::lmer(mean_trust_value ~ Bucky.Errors.Count*Pride.Errors.Count + (reliability|ID),
+   data = samp.df)
+
+BEST.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + (reliability|ID),
+data = samp.df) 
+
+compare_performance(Base.lame,MLrBucky.lame,MLrPRIDE.lame,BEST.lame, comb.lame, comb2.lame )
+
+
+```
+
+#Repeat the process with self-efficacy
+```{r}
+Base.lame = MLID.lame
+MLrBucky.lame = lme4::lmer(SSE_1 ~ Pride.Errors.Count + (1|ID),
+   data = ersamp.df)
+MLrPRIDE.lame = lme4::lmer(SSE_1 ~ Bucky.Errors.Count + (1|ID),
+   data = ersamp.df)
+
+comb.lame = lme4::lmer(SSE_1 ~ Bucky.Errors.Count*Pride.Errors.Count + reliability*exposure + (reliability|ID),
+   data = ersamp.df)
+
+compare_performance(Base.lame,MLrBucky.lame,MLrPRIDE.lame,BEST.lame, comb.lame)
+```
+
+
+```{r}
+
+Base.lame = MLID.lame
+MLrBucky.lame = lme4::lmer(SSE_1 ~ Pride.Errors.Count + (1|ID),
+   data = samp.df)
+MLrPRIDE.lame = lme4::lmer(SSE_1 ~ Bucky.Errors.Count + (1|ID),
+   data = samp.df)
+
+comb.lame = lme4::lmer(SSE_1 ~ Bucky.Errors.Count*Pride.Errors.Count + reliability*exposure + (reliability|ID),
+   data = samp.df)
+
+compare_performance(Base.lame,MLrBucky.lame,MLrPRIDE.lame,BEST.lame, comb.lame)
+
+```
+
+
+
+
+## Fit and report model 
+
+```{r}
+
+BEST.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + (reliability|ID),
+data = ersamp.df) 
+
+summary(BEST.lame)## Report 
+
+report(BEST.lame)
+
+```
+
+## Graph 3: Plot model parameters and effect size
+
+```{r}
+model_parameters(BEST.lame)
+
+effectsize(BEST.lame)
+
+parameters.df = model_parameters(BEST.lame)%>% 
+  as.data.frame()
+
+dot.plot =ggplot(parameters.df %>% filter(Parameter !="(Intercept)"),aes(Coefficient, Parameter))+  geom_pointrange(aes(xmin = CI_low, xmax = CI_high))+  theme_light()
+dot.plot
+
+
+```
+
+## Graph 4: Plot model-based mean 
+
+
+
+```{r}
+estimate_means(BEST.lame)
+estimate_contrasts(BEST.lame)
+means.df = estimate_means(BEST.lame) %>% as.data.frame()
+sina.plot =
+ggplot(rel.df, aes(interaction(exposure, reliability), mean))+  
+  geom_hline(yintercept = mean(rel.df$mean), colour ="grey85")+  
+  geom_violin(colour ="grey90", fill ="grey90")+  
+  geom_sina(colour ="grey55", size =.4) +  
+  ylab("Mean Trust Value") +
+  ylab("Interaction Between Exposure and Reliability") +
+  geom_pointrange(data = means.df, aes(interaction(exposure, reliability), Mean, ymin = CI_low,
+ymax = CI_high))+  theme_light() + ggtitle("Mean Trust Value for Exposure and Reliability Groupings") +
+  guides(x = "axis_nested") 
+
+sina.plot
+
+
+```
+
+
+## Self Efficacy Models: Which variable would best explain the differences across the participants? 
+Result: The complexity has comparable measures to reliability in BIC, RMSE and R^2, but complexity seems to reduce the AIC. The complexity may matter more in the measurement of self efficacy 
+
+## Prepare the data 
+```{r}
+stemp = ersamp.df %>%
+  group_by(ID, reliability, exposure, event) %>%
+  select(exposure, reliability, ID, SSE_1, event) %>%
+  summarise(exposure, reliability, ID, event, mean = mean(SSE_1, na.rm = TRUE)) %>%
+  distinct(exposure, reliability, ID, event, mean)
+
+stemp
+
+stemp2 = ersamp.df %>%
+  group_by(ID, reliability, exposure, event, complexity) %>%
+  select(exposure, reliability, ID, SSE_1, event, complexity) %>%
+  summarise(exposure, reliability, ID, event, complexity, mean = mean(SSE_1, na.rm = TRUE)) %>%
+  distinct(exposure, reliability, ID, event, mean, complexity)
+
+stemp2
+
+
+```
+
+## Visualize the data
+```{r}
+
+ggplot(stemp, aes(interaction(exposure, reliability), mean))+  
+  geom_violin(colour ="grey90", fill ="grey90")+  
+  geom_sina(colour ="grey55", size =.4)+  
+  theme_light() +
+  ylab("Self Efficacy") +
+  ggtitle("Self Efficacy vs. Interaction Between Exposure and Reliability") + 
+  guides(x = "axis_nested")
+
+ggplot(stemp2, aes(interaction(complexity, exposure), mean)) +  
+  geom_violin(colour ="grey90", fill ="grey90") +  
+  geom_sina(colour ="grey55", size =.4)+  
+  theme_light() +
+  ylab("Self Efficacy") +
+  ggtitle("Self Efficacy vs. Interaction Between Exposure and Complexity") + 
+  guides(x = "axis_nested")
+
+
+```
+
+## Mixed Model Effects for Self Efficacy 
+
+Self Efficacy Models:  Which variable would best explain the differences across the participants in predicting self-efficacy throughout the experiment? 
+
+Result: It was important to include reliability and exposure in the model and adding efficacy and complacency to the model seem to reduce the RMSE, AIC, and BIC. 
+
+```{r}
+SML1.lame = lme4::lmer(SSE_1 ~ (1|ID), data = ersamp.df)
+SML2.lame = lme4::lmer(SSE_1 ~  complexity + (1|ID), data = ersamp.df)
+SML3.lame = lme4::lmer(SSE_1 ~ reliability + (reliability|ID), data = ersamp.df) 
+SML4.lame = lme4::lmer(SSE_1 ~ reliability + exposure + (reliability|ID), data = ersamp.df) 
+SML45.lame = lme4::lmer(SSE_1 ~ reliability*exposure + (reliability|ID), data = ersamp.df) 
+SML5.lame = lme4::lmer(SSE_1 ~ reliability*exposure + complacency_value + (reliability|ID),data = ersamp.df)
+SML6.lame = lme4::lmer(SSE_1 ~ reliability*exposure + efficacy_value + (reliability|ID),data = ersamp.df)
+SML7.lame = lme4::lmer(SSE_1 ~ reliability*exposure + efficacy_value*complacency_value + (reliability|ID),data = ersamp.df)
+
+efficacy.table = compare_performance(SML1.lame, SML2.lame, SML3.lame,SML4.lame, SML45.lame, SML5.lame, SML6.lame, SML7.lame, rank = TRUE)
+
+efficacy.table
+
+```
+
+
+
+
+```{r}
+
+SBEST.lame = lme4::lmer(SSE_1 ~ reliability*exposure + efficacy_value*complacency_value + (reliability|ID),data = ersamp.df)
+
+summary(SBEST.lame)## Report 
+
+report(SBEST.lame)
+
+```
+
+```{r}
+## Plot model parameters and effect size
+model_parameters(SBEST.lame)
+
+effectsize(SBEST.lame)
+
+parameters.df = model_parameters(SBEST.lame)%>% 
+  as.data.frame()
+
+dot.plot =ggplot(parameters.df %>% filter(Parameter !="(Intercept)"),aes(Coefficient, Parameter))+  geom_pointrange(aes(xmin = CI_low, xmax = CI_high))+  theme_light()
+dot.plot
+
+
+```
+
+## Plot model-based mean 
+
+```{r}
+estimate_means(SBEST.lame)
+estimate_contrasts(SBEST.lame)
+smeans.df = estimate_means(SBEST.lame) %>% as.data.frame()
+```
+
+
+```{r}
+ssina.plot =
+ggplot(stemp, aes(interaction(exposure, reliability), mean))+  
+  geom_hline(yintercept = mean(stemp$mean), colour ="grey85")+  
+  geom_violin(colour ="grey90", fill ="grey90")+  
+  geom_sina(colour ="grey55", size =.4)+  
+  geom_pointrange(data = smeans.df, aes(interaction(exposure, reliability), Mean, ymin = CI_low,
+ymax = CI_high))+  theme_light() + ylab("SSE") +
+  guides(x = "axis_nested")
+
+
+ssina.plot
+
+```
+
+
+## Investigation into Variables that Influence Reliability and Exposure 
+Result: Complexity did provide the best model by having a lower RMSE and AIC. This is important because the added complexity to the model seems to have a pay-off for measurement of self-efficacy. 
+
+```{r}
+
+SLID.lame = lme4::lmer(SSE_1 ~ (1|ID),
+   data = ersamp.df)
+
+SLre.lame = lme4::lmer(SSE_1 ~  reliability + (1|ID), 
+   data = ersamp.df) 
+
+SBEST.lame = lme4::lmer(SSE_1 ~  complexity + (1|ID), #best model
+   data = ersamp.df)
+
+SLexpo.lame = lme4::lmer(SSE_1 ~  exposure + (1|ID), 
+   data = ersamp.df)
+
+SLeve.lame = lme4::lmer(SSE_1 ~ event + (1|ID), 
+   data = ersamp.df)
+
+ASBEST.lame = lme4::lmer(SSE_1 ~  complexity + (complexity|ID), #best model
+   data = ersamp.df) #best
+
+#BSBEST.lame = lme4::lmer(SSE_1 ~  complexity + (reliability|ID), #best model
+   #data = ersamp.df) #does not work
+
+compare_performance(SLID.lame, SLre.lame, SBEST.lame, SLexpo.lame, SLeve.lame, ASBEST.lame, rank = TRUE)
+```
+
+
+
+```{r}
+SBASELINE.lame = lme4::lmer(SSE_1 ~ reliability + (reliability|ID),
+   data = ersamp.df) 
+
+SML1.lame = lme4::lmer(SSE_1 ~ (reliability|ID),
+   data = ersamp.df)
+
+SML2.lame = lme4::lmer(SSE_1 ~ exposure + (reliability|ID),
+   data = ersamp.df) 
+
+SBEST.lame = lme4::lmer(SSE_1 ~ reliability + exposure + (reliability|ID),
+   data = ersamp.df) 
+
+SML4.lame = lme4::lmer(SSE_1 ~ reliability*exposure + (reliability|ID) ,
+   data = ersamp.df) 
+
+SML6.lame = lme4::lmer(SSE_1 ~ reliability*exposure + (reliability|ID) + (exposure|ID),
+   data = ersamp.df)
+
+compare_performance(SBASELINE.lame, SML1.lame, SML2.lame, SBEST.lame, SML4.lame,  SML6.lame)
+
+```
+
+## Combination of different measures of individuals 
+Result: efficacy and complacency improve the fit of the model  according to he measures of AIC, BIC, and RMSE (RMSE Slightly higher but counteracted by reducing overfitting)
+
+```{r}
+SBASELINE.lame = lme4::lmer(SSE_1 ~ reliability + exposure + (reliability|ID),
+   data = ersamp.df) 
+
+SMLEP.lame = lme4::lmer(SSE_1 ~ reliability*exposure + efficacy_value+ propensity_value + (reliability|ID),
+   data = ersamp.df)
+
+SBEST.lame = lme4::lmer(SSE_1 ~ reliability*exposure + efficacy_value+ complacency_value + (reliability|ID),
+   data = ersamp.df)
+
+SMLCP.lame = lme4::lmer(SSE_1 ~ reliability*exposure + propensity_value + complacency_value + (reliability|ID),
+   data = ersamp.df)
+
+SMLCPE.lame = lme4::lmer(SSE_1 ~ reliability*exposure + propensity_value + complacency_value + efficacy_value + (reliability|ID),
+   data = ersamp.df)
+
+SMLEP2.lame = lme4::lmer(SSE_1 ~ reliability*exposure + efficacy_value*propensity_value + (reliability|ID),
+   data = ersamp.df)
+
+SMLEC2.lame = lme4::lmer(SSE_1 ~ reliability*exposure + efficacy_value*complacency_value + (reliability|ID),
+   data = ersamp.df)
+
+SMLCP2.lame = lme4::lmer(SSE_1 ~ reliability*exposure + propensity_value*complacency_value + (reliability|ID),
+   data = ersamp.df)
+
+SMLCPE2.lame = lme4::lmer(SSE_1 ~ reliability*exposure + propensity_value*complacency_value*efficacy_value + (reliability|ID),
+   data = ersamp.df)
+
+compare_performance(SBASELINE.lame,SMLEP.lame, SBEST.lame, SMLCP.lame ,SMLCPE.lame ,SMLEP2.lame, SMLEC2.lame, SMLCP2.lame, SMLCPE2.lame)
+```
+
+
+
+
+
+```{r}
+#Go with complexity because it seems to explain more of the variance
+
+MLID.lame = lme4::lmer(mean_trust_value ~ (1|ID),
+   data = ersamp.df)
+
+BEST.lame = lme4::lmer(mean_trust_value ~  reliability + (1|ID),#best model
+   data = ersamp.df) 
+
+MLcomp.lame = lme4::lmer(mean_trust_value ~  complexity + (1|ID), 
+   data = ersamp.df)
+
+MLexpo.lame = lme4::lmer(mean_trust_value ~  exposure + (1|ID), 
+   data = ersamp.df)
+
+MLeve.lame = lme4::lmer(mean_trust_value ~ event + (1|ID), 
+   data = ersamp.df)
+
+compare_performance(MLID.lame, BEST.lame, MLcomp.lame, MLexpo.lame, MLeve.lame, rank = TRUE)
+```
+
+## Investigate if reliability has a slope effect as well. 
+Result: the slope effect of reliability seems to reduce the AIC, RMSE and increase the R^2. 
+
+```{r}
+
+BASELINE.lame = lme4::lmer(mean_trust_value ~  reliability + (1|ID),
+   data = ersamp.df) 
+
+BEST.lame = lme4::lmer(mean_trust_value ~ reliability + (reliability|ID),
+   data = ersamp.df) #lowest AIC and lowest RMSE and highest R^2
+
+MLA.lame3 = lme4::lmer(mean_trust_value ~ (1|ID) + (1|exposure),
+   data = ersamp.df) 
+
+compare_performance(BASELINE.lame, BEST.lame,  MLA.lame3, rank = TRUE)
+```
+
+
+## Investigate if there is an interaction between reliability and exposure. 
+Result: There is an interaction effect between the reliability and the exposure. 
+
+```{r}
+BASELINE.lame = lme4::lmer(mean_trust_value ~ reliability + (reliability|ID),
+   data = ersamp.df) #lowest AIC and lowest RMSE and highest R^2
+
+ML1.lame = lme4::lmer(mean_trust_value ~ (reliability|ID),
+   data = ersamp.df) 
+
+ML2.lame = lme4::lmer(mean_trust_value ~ exposure + (reliability|ID),
+   data = ersamp.df) 
+
+ML3.lame = lme4::lmer(mean_trust_value ~ reliability + (reliability|ID),
+   data = ersamp.df) 
+
+ML4.lame = lme4::lmer(mean_trust_value ~ reliability + exposure + (reliability|ID),
+   data = ersamp.df) 
+
+BEST.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + (reliability|ID) ,
+   data = ersamp.df) #best model with lowest AIC and keeping RMSE low
+
+ML6.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + (reliability|ID) + (exposure|ID),
+   data = ersamp.df)
+
+compare_performance(BASELINE.lame, ML1.lame, ML2.lame, ML3.lame, ML4.lame, BEST.lame, ML6.lame)
+
+```
+
+
+## Determine if efficacy, propensity, and complacency have an influence on the mean trust 
+Result: participant complacency seems to improve the model the most, although efficacy and propensity improve the model as well. 
+```{r}
+BASELINE.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + (reliability|ID),
+   data = ersamp.df) 
+
+MLE.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + efficacy_value+ (reliability|ID),
+   data = ersamp.df) 
+
+MLP.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + propensity_value+ (reliability|ID),
+   data = ersamp.df) 
+
+MLEE.lame = lme4::lmer(mean_trust_value ~ reliability*exposure*efficacy_value + (reliability|ID),
+   data = ersamp.df) 
+
+MLEP.lame = lme4::lmer(mean_trust_value ~ reliability*exposure*propensity_value + (reliability|ID),
+   data = ersamp.df) 
+
+MLEC.lame = lme4::lmer(mean_trust_value ~ reliability*exposure*complacency_value + (reliability|ID),
+   data = ersamp.df) 
+
+compare_performance(BASELINE.lame, MLE.lame, MLP.lame,BEST.lame, MLEE.lame, MLEP.lame, MLEC.lame)
+```
+
+## Combination of different measures of individuals 
+Result: The RMSE seems not to be changing for the models, but the interaction between propensity, complacency, and efficacy seems to provide the highest R^2 value and lowest AIC value, but could be overfitting wtih a slightly higher BIC. I am going to support the model anyway because I am interested in reducing the AIC because it takes into account the trade-off between goodness of fit and the simplicity of the model. 
+
+
+```{r}
+BASELINE.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + complacency_value+ (reliability|ID),
+   data = ersamp.df) 
+
+MLEP.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + efficacy_value+ propensity_value + (reliability|ID),
+   data = ersamp.df)
+
+MLEC.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + efficacy_value+ complacency_value + (reliability|ID),
+   data = ersamp.df)
+
+MLCP.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + propensity_value + complacency_value + (reliability|ID),
+   data = ersamp.df)
+
+MLCPE.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + propensity_value + complacency_value + efficacy_value + (reliability|ID),
+   data = ersamp.df)
+
+MLEP2.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + efficacy_value*propensity_value + (reliability|ID),
+   data = ersamp.df)
+
+MLEC2.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + efficacy_value*complacency_value + (reliability|ID),
+   data = ersamp.df)
+
+MLCP2.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + propensity_value*complacency_value + (reliability|ID),
+   data = ersamp.df)
+
+BEST.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + propensity_value*complacency_value*efficacy_value + (reliability|ID),
+   data = ersamp.df)
+
+compare_performance(BASELINE.lame, MLEP.lame, MLEC.lame ,MLEC.lame,  MLCP.lame,MLCPE.lame, MLEP2.lame, MLEC2.lame ,MLEC2.lame,  MLCP2.lame,BEST.lame)
+```
+
+

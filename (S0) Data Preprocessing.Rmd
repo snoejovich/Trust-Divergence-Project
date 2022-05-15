@@ -1,0 +1,723 @@
+---
+title: "(S0) Data preprocessing"
+output: html_notebook
+---
+
+```{r}
+library(readr)
+library(writexl)
+library(tidyverse)
+library(readxl)
+library(dplyr)
+library(ggforce)
+library(skimr)
+library(lme4)
+library(lmerTest)
+library(tidyr)
+library(fastDummies)
+library(readr)
+library(dplyr)
+library(ggh4x)
+library(forcats)
+library(multilevelTools)
+library(lme4)
+library(loo)
+library(performance)
+library(naniar)
+library(tidyr)
+library(brms)
+library(loo) # For leave-one-out cross validation model comparison
+library(lme4)
+library(ggpmisc)
+library(readr)
+library(writexl)
+library(tidyverse)
+library(readxl)
+library(dplyr)
+library(ggforce)
+library(skimr)
+library(lme4)
+library(lmerTest)
+library(tidyr)
+library(fastDummies)
+library(readr)
+library(dplyr)
+library(ggh4x)
+library(forcats)
+library(multilevelTools)
+library(lme4)
+library(loo)
+library(performance)
+library(naniar)
+library(tidyr)
+library(performance)
+library(naniar)
+library(tidyr)
+library(lmerTest)
+library(tidyverse)
+library(ggforce)
+library(report) # Generates textual description of results
+library(parameters) # Produces model parameters
+library(effectsize) # Estimates effect size
+library(modelbased) # Estimates mean and CI for each condition
+library(report) # Generates textual description of results
+library(parameters) # Produces model parameters
+library(effectsize) # Estimates effect size
+library(lmerTest)
+library(tidyverse)
+library(ggforce)
+library(R3port)
+library(effsize)
+library(caret)
+library(Deducer)
+library(ROCR)
+library(dbplyr)
+
+formula <- y ~ x
+
+#rm(list = ls())
+
+```
+
+##  M0: Answer_key.df: 
+create every scenario a participant could have in a dataframe. (4 scenarios *3 events *24 particpiants = 288 rows in the dataframe )
+### event: (startup, venting, shutdown)
+### scenario: (main 1, main 2, main 3, main 4) which scenario of the study sequence 
+### reasoning: reasoning given by bucky in this procedure
+### rec_procedure: (1,2,3) the procedure bucky is recommending
+### rec_correct: (1 = correct, 0 = incorrect) if bucky is giving the correct recommendation for the given scenario (i checked and this is on an scenario basis)
+### recommend_rerun: (1 = correct, 0 = incorrect) if bucky is recommending a rerun of the procedure
+### rerun_message_correct: (1 = correct, 0 = incorrect) if bucky is giving the correct rerun message for the given scenario (i checked and this is on an scenario basis)
+### reason : (1 = bucky says hes right, 0 = bucky says hes wrong) bucky says he is right or wrong in recommendation
+### reason_correct:( 1= bucky is right, 0 = bucky is wrong) buckys reason is right or wrong
+### complexity(none, simple, complex, both): refers to the complexity of the mistake made by bucky. Simple means bucky made a  mistake with providing the wrong recommendation, complex means bucky gave a wrong status update, both means bucky gave a wrong recommendation and status update, and none means that bucky did not make a mistake with the status update or recommendation. 
+### format: the dataframe has 39 rows because each event (startup, venting, shutdown) has 3 choices and 4 scenarios (3X4 = 12) so for a total of 3*12 = 36. The demo has 3 choices but only 1 scenario (3x1) = 3. In total: 36+3 = 39.
+
+```{r}
+answer_key = read_xlsx( #read in manually made answer key for the experiment
+  "answer_key.xlsx")
+
+answer_key.df = answer_key  %>%
+  mutate(complexity = ifelse(answer_key$rec_correct ==  0 & answer_key$rerun_message_correct == 0, "both", ifelse(answer_key$rec_correct ==  1 & answer_key$rerun_message_correct == 0, "complex", ifelse(answer_key$rec_correct ==  0 & answer_key$rerun_message_correct == 1, "simple", "none")))) %>%
+  dplyr::select(correct_procedure, selected_procedure, event, rec_correct, rerun_message_correct, reason_correct, complexity, rec_procedure, scenario) %>%
+  mutate(correct_procedure = as.factor(correct_procedure)) %>%
+  mutate(event = as.factor(event)) %>%
+  mutate(selected_procedure = as.factor(selected_procedure)) %>%
+  mutate(rerun_message_correct = as.factor(rerun_message_correct))%>%
+  mutate(reason_correct = as.factor(reason_correct)) %>% 
+  mutate(rec_correct = as.factor(rec_correct)) %>%
+  mutate(complexity = as.factor(complexity))  %>%
+  mutate(rec_procedure = as.factor(rec_procedure)) %>%
+  mutate(scenario = as.factor(scenario))
+answer_key.df
+
+```
+##  M0: Experiment.df 
+
+### format: this is an empty dataframe of all the possible experimental conditions (3 events x 24 participants x 4 scenarios = 288). I filtered out the demo data for consistency purposes. 
+
+```{r}
+experiment.df = answer_key.df%>%
+  dplyr::select(-selected_procedure) %>%
+  distinct() %>%
+  mutate(scenario = as.factor(scenario)) %>%
+  filter(event != "Demo")
+
+experiment.df = merge(experiment.df, paste(1:24))
+
+colnames(experiment.df)[9] ="ID"
+
+experiment.df = experiment.df %>%
+  mutate(ID = as.factor(ID))
+
+experiment.df
+```
+
+##  M1: PRIDE Pre-Cleaning
+This block of code is how I extracted and separated the summary and raw log files. 
+```{r}
+# #source: https://stackoverflow.com/questions/31995546/how-to-read-a-zip-file-in-r-and-iterate-through-each-txt-file-to-convert-it-int
+# 
+# ## Set path for your working location
+# setwd("PRIDE_data")
+# 
+# ## unzipped it the file
+# #unzip("PRIDE_data.tbz")
+# 
+# ## Check file in the zipped file
+# list.files()
+# 
+# ## Read the file
+# temp = list.files(pattern="*.tsv")
+# 
+# processed.list = temp[1:24]
+# summary.list = temp[25:48]
+# 
+# ## Read the file all together
+# #myfiles = do.call("rbind", lapply(temp, function(x) read.table(x, stringsAsFactors = FALSE,header = TRUE)))
+# 
+# #mylist <- lapply(temp, function(i) read_table(i))
+# 
+# # put em all together
+# processedfiles.df = do.call("rbind", lapply(processed.list, function(x) read.delim(x, stringsAsFactors = FALSE,header = TRUE)))
+# summaryfiles.df = do.call("rbind", lapply(summary.list, function(x) read.delim(x, stringsAsFactors = FALSE,header = TRUE)))
+# 
+# ## Use the regex method to extract (event, scenario, order) from the procedureName
+# 
+# #filter to only have the procedures
+# summary_clean.df = summaryfiles.df[grep("Procedure",summaryfiles.df$procedureName),]
+# 
+# #extract the scenario
+# 
+# #summary_clean.df$scenario = substring(str_extract(summary_clean.df$procedureName,"/(.*?)/"),2,2) this might have to be manual
+# #source: http://jenrichmond.rbind.io/post/mutate-and-if-else-to-create-new-variables/
+# summary_clean.df$scenario = substring(str_extract(summary_clean.df$procedureName,"/(.*?)."),2,2)
+# summary_clean.df = summary_clean.df %>%
+#   mutate(event = case_when(grepl("Startup", summary_clean.df$procedureNam) ~ "Startup",
+#                                 grepl("Vent", summary_clean.df$procedureNam) ~ "Venting",
+#                                 grepl("Shutdown", summary_clean.df$procedureNam) ~ "Shutdown"))
+# 
+# #source :https://stackoverflow.com/questions/1454913/regular-expression-to-find-a-string-included-between-two-characters-while-exclud
+# 
+# summary_clean.df$selected_procedure = substr(str_extract(summary_clean.df$procedureName,"(?<=_)(.*?)(?=_-_)"), nchar(str_extract(summary_clean.df$procedureName,"(?<=_)(.*?)(?=_-_)")), nchar(str_extract(summary_clean.df$procedureName,"(?<=_)(.*?)(?=_-_)")))
+# 
+# summary_clean.df$ID = gsub("crewmember", "", summary_clean.df$user)
+# 
+# #source: https://stackoverflow.com/questions/14543627/extracting-numbers-from-vectors-of-strings/38712300
+# summary_clean.df = summary_clean.df %>%
+#   # mutate(scenario = as.factor(scenario)) %>%
+#   mutate(selected_procedure = as.factor(selected_procedure)) %>%
+#   mutate(event = as.factor(event)) %>%
+#   mutate(ID = as.factor(ID))
+# 
+# summary_clean.df  = summary_clean.df  %>%
+#   add_column(reliability = if_else(.$scenario <= 2, "high","low")) %>%
+#   mutate(reliability = as.factor(reliability)) %>% # 1= high and 0 = low
+#   mutate(scenario = as.factor(scenario))
+
+```
+
+I exported the data to excel. I Manually inputted the order, cleaned some participants that had scenario 2 as 1 because of a bug in PRIDE and changed event to DEMO at the start of each participant if they were in main 1. Coded error with participant 23 as ERROR in the event. 
+```{r}
+#write_xlsx(summary_clean.df, "verify4.xlsx") #export to excel file and turned into PRIDE_cleaned.xlsx
+```
+
+## M1: PRIDE features 
+
+### session =  (0,1,2,3,4)  indicates which trial in the experiment (inputted manually). 0 is demo, 1 is session 1, 2 is session 2, etc. 
+### reliability: (high,low) if the participant is in the high or low reliability trial
+### event: (startup,venting,shutdown) 
+### exposure: (0,1,2) indiciates which exposure within the high or low reliability (demo = 0) first exposure = 1, second exposure = 2
+### scenario = (main 1, main 2, main 3, main 4) which scenario of the study sequence 
+### order = (1234, 2134, 1243, 2143) which experimental order the participant received 
+### selected_procedure: (1,2,3) which procedure the participant ran
+### runs: (0 to infinity) the number of times the participant ran a procedure for a given scenario and event 
+
+```{r}
+PRIDE = read_xlsx(
+  "PRIDE_cleaned.xlsx")
+
+PRIDE.df = PRIDE %>%
+  mutate(order = as.factor(order)) %>%
+  mutate(scenario = as.factor(scenario)) %>%
+  mutate(reliability = as.factor(reliability)) %>%
+  mutate(event = as.factor(event)) %>%
+  mutate(selected_procedure = as.factor(selected_procedure))
+  
+
+# PRIDE.df = PRIDE.df %>%
+#   mutate(exposure = case_when(grepl("1", PRIDE.df$selected_procedure) & grepl("1234", PRIDE.df$order)~ "1", grepl("2", PRIDE.df$selected_procedure) & grepl("1234", PRIDE.df$order~ "2")))
+
+
+PRIDE.df = PRIDE.df %>%
+  mutate(session = ifelse(PRIDE.df$event == "Demo", "0",
+                        ifelse(PRIDE.df$scenario == 1 & PRIDE.df$order == 1234, "1",
+                       ifelse(PRIDE.df$scenario == 2 & PRIDE.df$order == 1234, "2", 
+                              ifelse(PRIDE.df$scenario == 3 & PRIDE.df$order == 1234, "3",
+                                     ifelse(PRIDE.df$scenario == 4 & PRIDE.df$order == 1234, "4", 
+                                            ifelse(PRIDE.df$scenario == 2 & PRIDE.df$order == 2134, "1",
+                                                   ifelse(PRIDE.df$scenario == 1 & PRIDE.df$order == 2134, "2", 
+                                                          ifelse(PRIDE.df$scenario == 3 & PRIDE.df$order == 2134, "3",
+                                                                 ifelse(PRIDE.df$scenario == 4 & PRIDE.df$order == 2134, "4",
+                                                                    ifelse(PRIDE.df$scenario == 1 & PRIDE.df$order == 1243, "1", 
+              ifelse(PRIDE.df$scenario == 2 & PRIDE.df$order == 1243, "2",
+              ifelse(PRIDE.df$scenario == 4 & PRIDE.df$order == 1243, "3", 
+              ifelse(PRIDE.df$scenario == 3 & PRIDE.df$order == 1243, "4", 
+              ifelse(PRIDE.df$scenario == 1 & PRIDE.df$order == 2143, "2",
+              ifelse(PRIDE.df$scenario == 2 & PRIDE.df$order == 2143, "1", 
+              ifelse(PRIDE.df$scenario == 3 & PRIDE.df$order == 2143, "4",
+              ifelse(PRIDE.df$scenario == 4 & PRIDE.df$order == 2143, "3", NA)))))))))))))))))) 
+
+PRIDE.df = PRIDE.df %>%
+  mutate(exposure = ifelse(PRIDE.df$session == 0, 0, ifelse(PRIDE.df$session == 1|PRIDE.df$session == 3 , 1, 2))) %>%
+  mutate(exposure = as.factor(exposure)) %>%
+   mutate(session = as.factor(session)) %>%
+  subset(startTime != "2021-06-16 22:04:07") %>% #remove participant 23 that was canceled by the date. Chcked that this broguht the data from 290 to 289 since I Could not filter by the combination of the ID and the startTiem properly. 
+  filter(event != "Demo") # focusing only on non-Demo data
+  
+  
+
+PRIDE.df$ID[PRIDE.df$ID == 25]  <- 23 #change participant 25 to 23
+
+
+#left with 266 rows of PRIDE data without the demo data
+
+
+
+# 
+PRIDE_reruns.df = PRIDE.df %>%
+  #mutate(reliance_instances = as.numeric(reliance_instances)) %>%
+  group_by(ID, event, scenario) %>%
+  summarise(runs =  n()) #reliance_sum = cumsum(reliance))
+
+
+PRIDE.df= left_join(PRIDE.df, PRIDE_reruns.df, by = c("event","ID", "scenario")) #266 rows of data in PRIDE
+
+PRIDE.df
+
+```
+
+
+##  M4: PRIDE + Answer Key = experiment.df
+
+Allows the experiment dataframe to have the correct session for each scenario and and order. 
+
+```{r}
+#get each participant order in the data frame 
+order.df = PRIDE.df %>% group_by(ID) %>%
+  summarise(order) %>%
+  distinct()
+
+experiment.df = merge(experiment.df, order.df)
+
+experiment.df = experiment.df%>%
+  mutate(session = ifelse(experiment.df$event == "Demo", "0",
+                        ifelse(experiment.df$scenario == 1 & experiment.df$order == 1234, "1",
+                       ifelse(experiment.df$scenario == 2 & experiment.df$order == 1234, "2", 
+                              ifelse(experiment.df$scenario == 3 & experiment.df$order == 1234, "3",
+                                     ifelse(experiment.df$scenario == 4 & experiment.df$order == 1234, "4", 
+                                            ifelse(experiment.df$scenario == 2 & experiment.df$order == 2134, "1",
+                                                   ifelse(experiment.df$scenario == 1 & experiment.df$order == 2134, "2", 
+                                                          ifelse(experiment.df$scenario == 3 & experiment.df$order == 2134, "3",
+                                                                 ifelse(experiment.df$scenario == 4 & experiment.df$order == 2134, "4",
+                                                                    ifelse(experiment.df$scenario == 1 & experiment.df$order == 1243, "1", 
+              ifelse(experiment.df$scenario == 2 & experiment.df$order == 1243, "2",
+              ifelse(experiment.df$scenario == 4 & experiment.df$order == 1243, "3", 
+              ifelse(experiment.df$scenario == 3 & experiment.df$order == 1243, "4", 
+              ifelse(experiment.df$scenario == 1 & experiment.df$order == 2143, "2",
+              ifelse(experiment.df$scenario == 2 & experiment.df$order == 2143, "1", 
+              ifelse(experiment.df$scenario == 3 & experiment.df$order == 2143, "4",
+              ifelse(experiment.df$scenario == 4 & experiment.df$order == 2143, "3", NA)))))))))))))))))) %>%
+  mutate(scenario = as.numeric(scenario))
+
+experiment.df = experiment.df %>%
+  mutate(reliability = if_else(experiment.df$scenario <= 2, "high","low")) %>%
+  mutate(exposure = ifelse(experiment.df$session == 0, 0, ifelse(experiment.df$session == 1|experiment.df$session == 3 , 1, 2))) %>%
+  mutate(exposure = as.factor(exposure)) %>%
+  mutate(session = as.factor(session)) %>%
+   mutate(reliability = as.factor(reliability))  %>%
+  mutate(scenario = as.factor(scenario))
+
+
+experiment.df 
+#288 rows for the overall experiment
+
+experiment.df %>%filter(ID ==2)
+
+```
+
+##  M2: Pre-Qualtrics Cleaning 
+
+I filtered the qualtrics zip file below for wrong data. My steps are explained in the comments. I exported the data to qualtrics_cleaned.xlsx
+
+```{r}
+#  df <- read_csv(
+#    "Qualtrics.zip")
+# 
+#  write_xlsx(df, "/Users/sofia/Google Drive/NASA Testing/July 2020/Data Rendering/data_none.xlsx")
+# 
+#  df_clean =
+#    df %>%
+#    filter(StartDate >= "2021-05-25 00:00:00", ID %in% (1:25), !(ID == 11 & StartDate >= "2021-06-09 09:00:00"))  #our first participant began on may 26th, so we can filter anything before that #participants outside 1-25 did not have relevant data on participants (checked the time frame)
+#    #  if(ID == 11) {
+#    #    filter(StartDate <= "2021-06-09 09:00:00")
+#    # } & StartDate <= "2021-06-09 09:00:00") #remove the 11 that was after the normally scheduled time, arbitrary after the last date chosen
+# #
+# #
+# #
+#  write_xlsx(df_clean, "/Users/sofia/Google Drive/NASA Testing/July 2020/Data Rendering/data.xlsx") #export to excel file
+#  
+# df_clean %>%
+#   filter(ID == 11)
+```
+
+## M2: Qualtrics dataframe: From the data.xlsx file I inputted the sessions manually and cleaned the event indicated by the participant using the notetaking. 
+### session: (0,1,2,3,4)  indicates which trial in the experiment (inputted manually). 0 is demo, 1 is session 1, 2 is session 2, etc. 
+### event: (startup,venting,shutdown) manually cleaned participants sometimes put in the wrong information
+
+```{r}
+qualtrics <- read_excel("qualtrics_cleaned.xlsx") #240 rows of data which matches the data.xlsx
+
+qualtrics.df = qualtrics %>%
+  mutate(ID = as.factor(ID)) %>%
+  mutate(session = as.factor(session)) %>%
+  mutate(event = as.factor(event)) %>%
+  dplyr::select(StartDate, EndDate, `Duration (in seconds)`, ID, event, session, SSE_1, Trust_1, Trust_2, Trust_3, Trust_4, Trust_5, Trust_6,
+         Trust_7, Trust_8, Trust_9, Trust_10, Trust_11, Trust_12, Q15_1) %>%
+  filter(ID != 23)%>%  #remove person 23 from the qualtrics data 
+  filter(event != "Demo")
+
+qualtrics.df$ID[qualtrics.df$ID == 25]  <- 23 #participant 25 was actually participant 23. 
+
+
+qualtrics.df #216 rows of useable qualtrics data
+
+```
+
+## M3: PRIDE + Qualtrics 
+
+(qualtrics + PRIDE = 255 rows, but we have 215 distinct rows of data for event, id, and session)
+
+
+```{r}
+QP.df= left_join(qualtrics.df, PRIDE.df, by = c("event", "ID", "session"))
+
+QP.df = QP.df %>% #216 rows of qualtrics data which is the same as the original
+        filter(!is.na(order)) #dropping participant 16 venting because it is unclear if survey was for startup or venting 
+
+#leaves us with 255 rows and no NAs in variables of concern, some of the qualtrics is repeated for reruns, and some of the PRIDE data is not in the qualtrics data
+QP.df = QP.df %>%
+  group_by(ID, scenario, event) %>%
+  mutate(scenario = as.factor(scenario)) %>%
+  #mutate(percent_reliance = sum(reliance_instances)/reruns) #keep only the last row of the grouping
+  arrange(startTime) %>% #want the highest time at the bottom because that is the last event 
+  slice(n())
+
+QP.df
+```
+
+
+```{r}
+## Filter all the merged data 
+
+#library(dplyr)
+
+QP_filtered.df  = QP.df%>%
+  dplyr::select(StartDate, EndDate, ID, event, session, SSE_1, Trust_1, Trust_2, Trust_3, Trust_4, Trust_5, Trust_6, Trust_7, Trust_8, Trust_9, Trust_10, Trust_11, Trust_12, Q15_1, reliability, scenario, selected_procedure, reliability, order, exposure, runs) %>% #select rows where the data is unique to the ID, event, and scenario
+group_by(ID, scenario, event)
+
+
+QP_filtered.df #215 rows of data of the 288 desired for the study
+
+```
+
+## M3: QP + Experiment.df = QP_NA.df
+
+### selected_procedure_correct: (1 = correct, 0= incorrect) whether the participant ran the correct or incorrect procedure
+
+add answer key and get a single row for each session, event, and ID (must be less than 266 rows)
+merge with the qualtrics data and get the distinct data (qualtrics + PRIDE = 255 rows, but we have 215 distinct rows of qualtrics data)
+experiment calls for 288 rows (3*4*24 = 288) 
+
+The dataframe in this section is empty and is being filled by the information we have from the experiment. 
+
+```{r}
+
+QP_NA.df = left_join(experiment.df, QP_filtered.df, all = TRUE)
+
+QP_NA.df = QP_NA.df %>%
+  mutate(selected_procedure_correct = if_else(QP_NA.df$correct_procedure == QP_NA.df$selected_procedure, 1,0)) %>%
+  mutate(selected_procedure_correct = as.factor(selected_procedure_correct))
+
+QP_NA.df
+```
+
+
+
+##  M5: Finalize Dataframe 
+
+This is the final dataframe for the mean trust value. Merging with demographics data to get information on individual differences. 
+
+```{r}
+p.df = QP_NA.df %>%
+  gather("p_trust_measure", "p_trust_value", Trust_6:Trust_12) %>%
+  mutate(p_trust_value = as.numeric(p_trust_value)) %>%
+  group_by(ID, event, session) %>%
+  summarise(p_value = mean(p_trust_value))
+
+QP_NA.df %>%
+  filter(ID == 1) %>%
+  filter(event == "Shutdown") %>%
+  filter(session == 1)
+
+n.df = QP_NA.df %>%
+  gather("n_trust_measure", "n_trust_value", Trust_1:Trust_5) %>%
+  mutate(n_trust_value = as.numeric(n_trust_value)) %>%
+  group_by(ID, event, session) %>%
+  summarise(n_value = mean(n_trust_value))
+
+n.df$n_value<- 8- n.df$n_value #reverse the negative trust value scale 
+
+
+np.df = merge(p.df, n.df, all = TRUE)
+
+np.df = left_join(QP_NA.df, np.df, by = c("ID", "event", "session"))
+
+final.df = np.df %>%
+  add_column(mean_trust_value = rowMeans(np.df[c("p_value", "n_value")]))
+
+final.df = final.df %>%
+  mutate(ID = as.factor(ID))
+
+#final.df #has 288 rows
+
+## Demographics + final.df = f.df
+
+demographics.df = read.csv("Demographics.csv")
+
+
+demo_clean.df = demographics.df %>%
+  filter(Q1 %in% (1:25)) %>%
+  filter( Q1 != 23) %>% 
+  #mutate(Q1 = replace(10, StartDate == "2021-06-02 13:13:11", 9)) %>%
+  #mutate(Q1 =  case_when(StartDate == "2021-06-02 13:13:11" ~ 9)) %>% #demo_clean.df #missing 3 participants: 4, 9, 14 #a participant 9 accidentally inputted 9 when they should ahve inputted 10. 4 and 14 no data
+  mutate(AICP_5 = as.numeric(AICP_5)) %>%
+  mutate(AICP_8 = as.numeric(AICP_8)) %>%
+  mutate(AICP_5 = 6 - AICP_5) %>% 
+  mutate(AICP_8 = 6 - AICP_8) 
+
+demo_clean.df$Q1[demo_clean.df$Q1 == 25]  <- 23
+
+```
+
+
+
+
+```{r}
+demo_clean.df$Q1[demo_clean.df$StartDate == "2021-06-02 13:13:11" ] <- "9"
+#demo_clean.df
+
+demo.df = demo_clean.df %>%
+  gather("efficacy_measure", "efficacy_value", GSE_1: GSE_8) %>%
+  mutate(efficacy_value = as.numeric(efficacy_value)) %>%
+   group_by(Q1) %>%
+   summarise(efficacy_value = mean(efficacy_value))
+
+demo2.df = demo_clean.df %>%
+  gather("propensity_measure", "propensity_value", PtT_1: PtT_4) %>%
+  mutate(propensity_value = as.numeric(propensity_value)) %>%
+   group_by(Q1) %>%
+   summarise(propensity_value = mean(propensity_value))
+
+demo3.df = demo_clean.df %>%
+  gather("complacency_measure", "complacency_value", AICP_1: AICP_10) %>%
+  mutate(complacency_value = as.numeric(complacency_value)) %>%
+    group_by(Q1) %>%
+    summarise(complacency_value = mean(complacency_value))
+
+colnames(demo.df)[1] = "ID"
+ colnames(demo2.df)[1] = "ID"
+ colnames(demo3.df)[1] = "ID"
+ 
+demo.df = demo.df %>%
+   mutate(ID = as.factor(ID))
+ 
+demo2.df = demo2.df %>%
+   mutate(ID = as.factor(ID))
+demo3.df = demo3.df %>%
+   mutate(ID = as.factor(ID))
+
+
+final.df = left_join(final.df, demo.df, by = "ID")
+
+final.df = left_join(final.df, demo2.df, by = "ID")
+
+final.df = left_join(final.df, demo3.df, by = "ID")
+
+drop.cols = c("Trust_1", "Trust_2", "Trust_3", "Trust_4", "Trust_5", "Trust_6", "Trust_7", "Trust_8", "Trust_9", "Trust_10", "Trust_11", "Trust_12")
+
+f.df = final.df %>%
+  dplyr::select(-drop.cols) %>%
+  mutate(SSE_1 = as.numeric(SSE_1)) %>%
+  mutate(event = fct_relevel(event, "Startup", "Venting", "Shutdown")) %>%
+  mutate(complexity = fct_relevel(complexity, "none", "simple", "complex", "both")) %>%
+  mutate(SSE_1 = as.numeric(SSE_1)) 
+
+f.df$ID = fct_reorder(f.df$ID, as.integer(f.df$ID))
+
+
+f.df %>%
+  filter(is.na(complacency_value)) %>%
+  distinct(ID) #ID 14, 21, and 4 did not fill out the demographic data 
+```
+
+
+
+
+## M6: Import errors for participants as received by Isabel
+
+
+
+```{r}
+errors.df = read.csv("Errors.csv")
+
+
+errors.df$reliability = as.factor(errors.df$reliability)
+errors.df$event = as.factor(errors.df$event)
+errors.df$Pride.Errors.Count = as.factor(errors.df$Pride.Errors.Count)
+errors.df$Bucky.Errors.Count = as.factor(errors.df$Bucky.Errors.Count)
+errors.df$ID= as.factor(errors.df$ID)
+errors.df$exposure = as.factor(errors.df$exposure)
+errors.df$event <- trimws(errors.df$event, which = c("right")) #removes some unmatches
+errors.df$ID <- trimws(errors.df$ID, which = c("right")) 
+errors.df$reliability <- trimws(errors.df$reliability, which = c("right")) 
+
+
+ersamp.df = left_join(f.df, errors.df, by = c("ID", "event", "exposure", "reliability")) %>%
+  filter(reliability!= "Training") 
+
+ersamp.df #has 288 rows
+
+```
+
+## Venn diagram of error types 
+```{r}
+trust= f.df %>%
+  filter(is.na(mean_trust_value)) %>%
+  dplyr::select(c("ID", "reliability", "exposure", "reliability", "event", "mean_trust_value"))
+#73 instances in which we do not have data on the mean trust (meaning participant probably did not get to this)
+
+
+error = errors.df %>%
+  filter(reliability != "Training") %>%
+  filter(is.na(Pride.Errors.Count))
+
+anti_join(error, trust, by = c("ID", "exposure", "reliability", "event")) #one instance where no error reporting, but we have trust data for it
+anti_join(trust, error, by = c("ID", "exposure", "reliability", "event")) #11 rows where we have no mean trust value, but we have information on the type of error (meaning the event did happen presumably...but it was not recorded in PRIDE)
+
+#63 missing error rows
+#73 missing trust rows
+
+```
+
+
+
+
+##  Trust and Distrust Dataframes
+
+The dataframe will be the same as above (288 rows) except the trust measures have been broken into trust and distrust. 
+
+```{r}
+p2.df = QP_NA.df %>%
+  gather("p_trust_measure", "p_trust_value", Trust_6:Trust_12) %>%
+  mutate(p_trust_value = as.numeric(p_trust_value)) %>%
+  group_by(ID, event, session) %>%
+  summarise(trust = mean(p_trust_value))
+
+n2.df = QP_NA.df %>%
+  gather("n_trust_measure", "n_trust_value", Trust_1:Trust_5) %>%
+  mutate(n_trust_value = as.numeric(n_trust_value)) %>%
+  group_by(ID, event, session) %>%
+  summarise(distrust = mean(n_trust_value))
+
+#n.df$n_value<- 8- n.df$n_value #reverse the negative trust value scale 
+
+
+np2.df = merge(p2.df, n2.df, all = TRUE)
+
+final2.df = left_join(QP_NA.df, np2.df, by = c("ID", "event", "session"))
+
+# final.df = np2.df %>%
+#   add_column(mean_trust_value = rowMeans(np2.df[c("p_value", "n_value")]))
+
+final2.df = final2.df %>%
+  mutate(ID = as.factor(ID))
+
+#final2.df #has 288 rows
+
+
+td.df = final2.df %>%
+  mutate(SSE_1 = as.numeric(SSE_1)) %>%
+  mutate(event = fct_relevel(event, "Startup", "Venting", "Shutdown")) %>%
+  mutate(complexity = fct_relevel(complexity, "none", "simple", "complex", "both")) %>%
+  mutate(reliability = fct_relevel(reliability, "high", "low")) %>%
+  mutate(exposure = fct_relevel(exposure, "1", "2")) %>%
+  mutate(SSE_1 = as.numeric(SSE_1))
+
+td.df = td.df %>%
+  group_by(ID, reliability, exposure, event) %>%
+  dplyr::select(reliability,trust, distrust, exposure, ID, event) %>%
+  summarise(reliability, trust = mean(trust, na.rm = TRUE), distrust = mean(distrust, na.rm = TRUE), exposure, ID, event) %>%
+  distinct() %>% 
+  pivot_longer(cols = trust:distrust, names_to= "trust_measure", values_to= "trust_value") %>%
+  mutate(trust_measure = as.factor(trust_measure))
+td.df
+
+# ggplot(td.df, aes(interaction(exposure, reliability), trust_value, color = trust_measure)) +
+#   facet_wrap(~trust_measure) +
+#   geom_violin() +
+#   geom_sina() 
+
+```
+
+##  Data Preparation for the Distributional Models 
+
+Preparing the data for the distribuitonal models. To be used on file "Distributional Model.rmd"
+```{r}
+
+dis.df = f.df %>%
+  group_by(ID, reliability, exposure) %>%
+  dplyr::select(reliability, exposure, ID, mean_trust_value) %>%
+  summarise(var_trust = var(mean_trust_value, na.rm = TRUE), reliability, exposure, ID ) %>%
+  distinct() %>%
+  filter(!is.na(var_trust))
+dis.df
+```
+
+## Logistic Regression Data Preprocessing
+```{r}
+model.df = f.df %>% mutate(missed = if_else(is.na(f.df$mean_trust_value) == TRUE, "missed","not_missed")) #missed an event in a scenario 
+
+#partition the data into the high and low reliability days
+
+low.df = model.df  %>% #low reliability day df
+  filter(reliability == "low") %>%
+  group_by(ID) %>%
+  dplyr::select(ID, missed, event, efficacy_value, propensity_value, complacency_value, exposure)%>%
+  ungroup(ID,event) #144 rows which means we have half of the data which is correct. 
+
+```
+
+
+```{r}
+high.df = model.df %>%
+  group_by(ID)  %>% #%>% 
+#   mutate(miss_high = if_else(sum(missed == "missed", na.rm = TRUE)
+# > 0, "missed", "not_missed")) %>%
+#   filter(reliability == "high") %>% 
+  summarise(mean_trust = mean(mean_trust_value, na.rm =TRUE), mean_SSE = mean(SSE_1, na.rm =TRUE), ID) %>%
+  distinct(mean_trust, mean_SSE, ID) %>%
+  ungroup(ID)
+#   select(miss_high, efficacy_value, propensity_value, complacency_value, SSE_1, ID, mean_trust_value) %>%
+#   summarise(mean_trust = mean(mean_trust_value, na.rm =TRUE), mean_SSE = mean(SSE_1, na.rm =TRUE),
+#   efficacy_value, propensity_value, complacency_value, ID, miss_high) %>%
+#   distinct(miss_high, efficacy_value, propensity_value, complacency_value, ID, mean_trust, mean_SSE)
+
+log.df = left_join(low.df, high.df)
+
+log.df = log.df %>%
+  drop_na(efficacy_value) %>%
+  #select(-ID) %>%
+  distinct() %>%
+  mutate(missed = as.factor(missed)) #%>%
+  #drop_na(me)
+
+log.df
+```
+
+```{r}
+qualtrics.df
+```
+
+
+
