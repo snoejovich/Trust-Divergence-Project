@@ -1,0 +1,432 @@
+---
+title: " (S7) Paper Analysis"
+output: html_notebook
+---
+
+
+## Trust Divergence Test
+
+```{r}
+f.df
+```
+
+```{r}
+graphinter.df = f.df %>%
+   group_by(ID) %>%
+  summarise(sd = sd(mean_trust_value, na.rm = TRUE))
+
+top.df = top_n(graphinter.df, 3)
+bottom.df = top_n(graphinter.df, -3)
+
+tb.df = rbind(top.df, bottom.df)
+
+graph.df = f.df
+
+graph.df$highlight = as.factor(if_else(graph.df$ID %in% tb.df$ID, 1, 0))
+
+graph.df
+
+```
+
+
+```{r}
+library(colorspace)
+
+ggplot(graph.df, aes(interaction(event,exposure, reliability), mean_trust_value, group = ID, color = highlight))+  
+  ggtitle("Divergence of Mean Trust Values") +
+  # geom_violin(colour ="grey90", fill ="grey90")+  
+  # geom_sina(colour ="grey55", size =.4)+  
+  geom_line() +
+  ylab("Participant Mean Trust Value")  +
+  xlab("Experimental Condition (Event, Exposure, and Reliability)") +
+  guides(x = "axis_nested") +
+  #  scale_colour_discrete(
+  #   labels = c("1" = "Highest and Lowest Trust Divergence (measured by \u03c3)",
+  #              "0" = "\u03c3 of Mean Trust Value")
+  # )
+  theme_light() +
+theme(legend.position = "none")  +
+  scale_colour_grey(start=0.8, end=0.2)#+
+  #scale_color_manual(rainbow_hcl(2))
+```
+
+
+# From H1
+## Divergence in Trust Graph
+
+
+## Revised Method
+```{r}
+Baseline.lame = lme4::lmer(mean_trust_value ~ (1|ID),
+   data = f.df)
+
+MLER1.lame = lme4::lmer(mean_trust_value ~ exposure + reliability + (1|ID),
+   data = f.df)
+
+MLER2.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + exposure + reliability + (1|ID),
+   data = f.df)
+
+MLER3c.lame = lme4::lmer(mean_trust_value ~ complacency_value+ reliability*exposure + exposure + reliability + (1|ID),
+   data = f.df)
+
+MLER4p.lame = lme4::lmer(mean_trust_value ~ propensity_value+ reliability*exposure + exposure + reliability + (1|ID),
+   data = f.df)
+
+MLERcp.lame = lme4::lmer(mean_trust_value ~ propensity_value+ complacency_value +  reliability*exposure + exposure + reliability + (1|ID),
+   data = f.df)
+
+MLER5.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + exposure + reliability + (reliability|ID),
+   data = f.df)
+
+TEST.lame = lme4::lmer(mean_trust_value ~ propensity_value + complacency_value+ reliability*exposure + exposure + reliability + (reliability|ID),
+   data = f.df)
+
+TEST2.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + exposure + reliability + (reliability|ID),
+   data = f.df)
+
+trust.table = compare_performance(Baseline.lame, MLER1.lame, MLER2.lame, MLER3c.lame, MLER4p.lame, MLERcp.lame , MLER5.lame, TEST.lame, TEST2.lame , rank = TRUE)
+trust.table
+
+```
+
+```{r}
+BEST.lame =  lme4::lmer(mean_trust_value ~ propensity_value + complacency_value+ reliability*exposure + exposure + reliability + (reliability|ID),
+   data = f.df)
+
+summary(BEST.lame)## Report 
+
+report(BEST.lame)
+```
+
+
+
+
+```{r}
+MLID.lame = lme4::lmer(mean_trust_value ~ (1|ID),
+   data = f.df)
+
+MLcomp.lame = lme4::lmer(mean_trust_value ~  (1|complacency_value), 
+                        data = f.df)
+
+MLprop.lame = lme4::lmer(mean_trust_value ~  (1|propensity_value), 
+                        data = f.df)
+
+MLprop1.lame = lme4::lmer(mean_trust_value ~  (reliability|propensity_value), 
+                        data = f.df)
+
+MLprop2.lame = lme4::lmer(mean_trust_value ~  reliability + exposure +  (reliability|propensity_value), 
+                        data = f.df)
+
+MLprop3.lame = lme4::lmer(mean_trust_value ~  reliability*exposure + (reliability|propensity_value), 
+                        data = f.df)
+
+MLprop4.lame = lme4::lmer(mean_trust_value ~  reliability*exposure + complacency_value + (reliability|propensity_value), 
+                        data = f.df)
+
+MLr.lame = lme4::lmer(mean_trust_value ~ (reliability|ID),
+   data = f.df)
+
+#MLc.lame = lme4::lmer(mean_trust_value ~ (complexity|ID),
+    #data = f.df) #not converging
+#MLcc.lame = lme4::lmer(mean_trust_value ~ complexity + (complexity|ID),
+   #data = f.df)  #not converging
+
+MLrr.lame = lme4::lmer(mean_trust_value ~ reliability + (1|ID),
+   data = f.df) 
+
+MLrr2.lame = lme4::lmer(mean_trust_value ~ reliability + (reliability|ID),
+data = f.df)  #this model produced the best results, but it does not make sense to have a categorical vairable be both fixed and random in a model: muscardinus.be/2017/08/fixed-and-random/#fit-with-lme4
+
+# FAIL = lme4::lmer(mean_trust_value ~ reliability + (reliability*exposure|ID),
+# data = f.df)
+
+# FAIL2 = lme4::lmer(mean_trust_value ~ reliability + (exposure|ID),
+# data = f.df)
+
+MLree.lame = lme4::lmer(mean_trust_value ~ exposure+ (reliability|ID),
+   data = f.df)
+
+MLree2.lame = lme4::lmer(mean_trust_value ~ exposure*reliability+ (reliability|ID),
+   data = f.df) #this model produced the best results, but it does not make sense to have a categorical vairable be both fixed and random in a model: muscardinus.be/2017/08/fixed-and-random/#fit-with-lme4
+
+MLree3.lame = lme4::lmer(mean_trust_value ~ exposure*reliability+ (1|ID),
+   data = f.df)
+
+trust.table = compare_performance(MLcomp.lame , MLprop.lame, MLID.lame,MLr.lame,MLrr.lame, MLprop2.lame,  MLree.lame , MLrr2.lame, MLree2.lame, MLree3.lame, MLprop1.lame, MLprop2.lame, MLprop3.lame, MLprop4.lame, rank = TRUE)
+trust.table
+
+```
+
+## Explanation of the best model
+
+```{r}
+
+BEST.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + (reliability|ID),
+data = f.df) 
+
+summary(BEST.lame)## Report 
+
+report(BEST.lame)
+
+```
+
+#H1
+
+## Individual measures correlated with trust
+
+```{r}
+prop = f.df %>%
+  group_by(ID, reliability) %>%
+  dplyr::select(propensity_value, mean_trust_value, reliability) %>%
+  summarise(propensity_value, trust = mean(mean_trust_value, na.rm = TRUE), reliability) %>%
+  distinct()
+
+rel= f.df %>%
+  group_by(ID) %>%
+  dplyr::select(reliability, mean_trust_value, reliability) %>%
+  summarise(reliability, trust = mean(mean_trust_value, na.rm = TRUE)) %>%
+  distinct()
+
+exp= f.df %>%
+  group_by(ID) %>%
+  dplyr::select(exposure, mean_trust_value) %>%
+  summarise(exposure, trust = mean(mean_trust_value, na.rm = TRUE)) %>%
+  distinct()
+
+
+lcomp.plot = ggplot(comp, aes(complacency_value, trust))  +
+  #facet_grid(~reliability) +
+  geom_point() +
+  coord_equal(xlim = c(2,7), ylim = c(2,7)) +  
+  geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  + 
+  ylab("mean trust value")
+
+# 
+# ggplot(df,aes(x = wt, y = hp)) + 
+#   geom_point() + 
+#   geom_smooth(method = "lm", se=FALSE) +
+#   geom_text(x = 2, y = 300, label = eq(df$wt,df$hp), parse = TRUE)
+
+ecomp.plot = ggplot(eff, aes(efficacy_value, trust))  +
+  #facet_grid(~reliability) +
+  geom_point() +
+  coord_equal(xlim = c(2,7), ylim = c(2,7)) +  
+  geom_smooth(method='lm', se = FALSE) +
+  stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  + 
+  ylab("mean trust value")
+
+tcomp.plot = ggplot(prop, aes(propensity_value, trust))  +
+  #facet_grid(~reliability) +
+  geom_point() +
+  coord_equal(xlim = c(2,7), ylim = c(2,7)) +  
+  geom_smooth(method='lm', se = FALSE) +
+  stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  + 
+  ylab("mean trust value")
+
+change.df = f.df %>% 
+  group_by(ID, reliability, propensity_value) %>%
+  summarise(trust = mean(mean_trust_value, na.rm = TRUE), ID, reliability, propensity_value, complacency_value, efficacy_value) %>%
+  distinct() %>%
+  pivot_wider(names_from = reliability, values_from = trust) %>%
+  mutate(trust_diff = high-low)
+
+#change.df
+
+changep.plot = ggplot(change.df, aes(propensity_value, trust_diff)) +
+  geom_point() +
+     geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               ) 
+
+changec.plot = ggplot(change.df, aes(complacency_value, trust_diff)) +
+  geom_point() +
+   geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               ) 
+
+changeE.plot = ggplot(change.df, aes(efficacy_value, trust_diff)) +
+  geom_point() +
+    geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               ) 
+#no correlation between propensity and drop in trust 
+
+
+lcomp.plot
+ecomp.plot
+tcomp.plot
+changep.plot
+changec.plot
+changeE.plot
+
+```
+
+## BLUPS
+
+```{r}
+
+formula <- y ~ x
+
+trust.df = f.df %>%
+   group_by(ID)%>%
+   summarise(mean_trust_value = mean(mean_trust_value, na.rm = TRUE))
+
+complacency.df = f.df %>%
+   group_by(ID) %>%
+   dplyr::select(complacency_value) %>%
+   distinct(complacency_value)
+ 
+propensity.df= f.df %>%
+   group_by(ID) %>%
+   dplyr::select(propensity_value) %>%
+   distinct(propensity_value)
+ 
+ 
+ names(complacency.df)[2] = paste("complacency_score")
+names(propensity.df)[2] = paste("propensity_score")
+
+ #names(tc.df)[3] = paste("complacency_score")
+
+ tc.df = left_join(trust.df, complacency.df, by = "ID")
+ td.df = left_join(trust.df, propensity.df, by = "ID")
+ 
+
+# ggplot(tc.df, aes(complacency_score,mean_trust_value, asp = 1)) +
+#  geom_point() +
+#    coord_equal(xlim = c(2,7), ylim = c(2,7)) +
+#    geom_smooth(method='lm', se = FALSE) +
+#    stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+#                formula = formula, parse = TRUE,
+#                label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+#                )  + 
+#    ylab("Mean Trust Value") +
+#   ggtitle("Complacency vs. Mean Trust Value")
+# 
+# 
+# 
+# ggplot(td.df, aes(propensity_score,mean_trust_value, asp = 1)) +
+#  geom_point() +
+#    coord_equal(xlim = c(2,7), ylim = c(2,7)) + 
+#    geom_smooth(method='lm', se = FALSE) +
+#    stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+#                formula = formula, parse = TRUE,
+#                label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+#                )  + 
+#    ylab("Mean Trust Value") +
+#   ggtitle("Propensity vs. Mean Trust Value")
+
+MLC.lame = lme4::lmer(mean_trust_value ~ reliability*exposure +  (reliability|ID),
+    data = f.df) #best model with lowest AIC and keeping RMSE low
+
+
+BLUP.df = coef(MLC.lame)$ID
+
+BLUP.df <- tibble::rownames_to_column(BLUP.df, "ID")
+
+BLUPc.df = left_join(BLUP.df, complacency.df, by = "ID")
+
+BLUPp.df = left_join(BLUP.df, propensity.df, by = "ID")
+
+names(BLUPc.df)[2] = paste("Intercept")
+names(BLUPp.df)[2] = paste("Intercept")
+
+ggplot(BLUPc.df, aes(complacency_score, Intercept)) +
+geom_point() +
+coord_equal(xlim = c(2,6), ylim = c(2,6)) +
+geom_smooth(method='lm', se = FALSE) +
+stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  + 
+xlab("complacency_score") +
+ylab("Intercapt: (reliability|ID)") +
+ggtitle("Complacency vs. BLUP")
+
+ggplot(BLUPp.df, aes(propensity_score, Intercept)) +
+geom_point() +
+coord_equal(xlim = c(2,6), ylim = c(2,6)) +
+   geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  + 
+xlab("propensity_score") +
+ylab("Intercapt: (reliability|ID)") +
+ggtitle("Propensity vs. BLUP")
+
+```
+
+## H2 Exposure and Reliability Graph 
+
+## Graph 1: Prepare and visualize the data
+```{r}
+library(dplyr)
+
+rel.df = f.df %>%
+  group_by(ID, reliability, exposure, event) %>%
+  dplyr::select(exposure, reliability, ID, mean_trust_value, event) %>%
+  summarise(exposure, reliability, ID, event, mean = mean(mean_trust_value, na.rm = TRUE)) %>%
+  distinct(exposure, reliability, ID, event, mean)
+
+
+comp.df = f.df %>%
+  group_by(ID, reliability, exposure, event, complexity) %>%
+  dplyr::select(exposure, reliability, ID, mean_trust_value, event, complexity) %>%
+  summarise(exposure, reliability, ID, event, complexity, mean = mean(mean_trust_value, na.rm = TRUE)) %>%
+  distinct(exposure, reliability, ID, event, mean, complexity)
+
+ggplot(rel.df, aes(interaction(exposure, reliability), mean))+  
+  ggtitle("Interaction of Exposure and Reliability vs. Mean Trust Value") +
+  geom_violin(colour ="grey90", fill ="grey90")+  
+  geom_sina(colour ="grey55", size =.4)+  
+  theme_light() +
+  ylab("mean trust value")  +
+  guides(x = "axis_nested") 
+  
+
+ggplot(comp.df, aes(interaction(exposure, complexity), mean)) +  
+  ggtitle("Interaction of Exposure and Complexity vs. Mean Trust Value") +
+  geom_violin(colour ="grey90", fill ="grey90") +  
+  geom_sina(colour ="grey55", size =.4)+  
+  theme_light() +
+  ylab("mean trust value") + 
+  guides(x = "axis_nested") 
+
+```
+
+```{r}
+estimate_means(BEST.lame)
+estimate_contrasts(BEST.lame)
+means.df = estimate_means(BEST.lame) %>% as.data.frame()
+sina.plot =
+ggplot(rel.df, aes(interaction(exposure, reliability), mean))+  
+  geom_hline(yintercept = mean(rel.df$mean), colour ="grey85")+  
+  geom_violin(colour ="grey90", fill ="grey90")+  
+  geom_sina(colour ="grey55", size =.4) +  
+  ylab("Participant Mean Trust Value") +
+  xlab(" Experimental Condition (Exposure and Reliability) ") +
+  geom_pointrange(data = means.df, aes(interaction(exposure, reliability), Mean, ymin = CI_low,
+ymax = CI_high))+  theme_light() + ggtitle("Distribution of Mean Trust Values Per Experimental Condition") +
+  guides(x = "axis_nested") 
+
+sina.plot
+
+
+```
+
