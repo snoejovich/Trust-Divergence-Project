@@ -8,4 +8,4 @@ S0 is the data cleaning script and schema definition.
 
 S7 is the analysis used for the paper.
 
-The project is best used by opening the S7 html file in R
+The project is best viewed by downloading and opening the Paper Analysis .html file in R
