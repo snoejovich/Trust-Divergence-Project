@@ -8,4 +8,4 @@ S0 is the data cleaning script and schema definition.
 
 S7 is the analysis used for the paper.
 
-The project is best viewed by downloading and opening the [Paper Analysis.html file](https://github.com/snoejovich/Trust-Divergence-Project/blob/main/Paper%20Analysis.nb.html) in R
+The project is best viewed by downloading and opening the [Findings Summary.html file](https://github.com/snoejovich/Trust-Divergence-Project/blob/main/Paper%20Analysis.nb.html) in R
