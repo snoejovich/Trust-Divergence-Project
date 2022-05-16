@@ -8,5 +8,5 @@ S0 is the data cleaning script and schema definition.
 
 S7 is the analysis used for the paper.
 
-The project is best viewed by opening the [Findings Summary.html file](https://github.com/snoejovich/Trust-Divergence-Project/blob/main/FindingsSummary.nb.html), right clicking "Save As", and then opening the saved file in R.
+The project is best viewed by downloading the [Findings Summary.html file](https://github.com/snoejovich/Trust-Divergence-Project/blob/main/FindingsSummary.nb.html) in your browser and opening it, right clicking "Save As", and then opening the saved file in R.
 
