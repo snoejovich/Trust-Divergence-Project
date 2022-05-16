@@ -1,0 +1,219 @@
+---
+title: "Findings Summary"
+author: "Sofia Noejovich, John D. Lee"
+output: 
+  html_notebook:
+    toc: true
+    number_sections: true
+---
+
+
+# Trust Divergence Graph 
+
+The analysis first investigated the way in which a participant's level of trust changed throughout the study. In Figure 1, we mapped the mean trust value of each participant throughout the experiment, and noticed three distinct divergences in trust. The line that starts higher on the graph represents the user with the higest variance in mean trust, the the line that starts lower represents the participant with the lowest variance in mean trust. This shows that participants varied in their path taken towards a trust outcome.  
+
+```{r}
+graphinter.df = f.df %>%
+   group_by(ID) %>%
+  summarise(sd = sd(mean_trust_value, na.rm = TRUE))
+
+top.df = top_n(graphinter.df, 1)
+bottom.df = top_n(graphinter.df, -1)
+
+tb.df = rbind(top.df, bottom.df)
+
+graph.df = f.df
+
+graph.df$highlight = as.factor(if_else(graph.df$ID %in% tb.df$ID, 1, 0))
+
+ggplot(graph.df, aes(interaction(event,exposure, reliability), mean_trust_value, group = ID, color = highlight))+  
+  ggtitle("Figure 1: Interaction of Exposure and Reliability vs. Mean Trust Value") +
+  # geom_violin(colour ="grey90", fill ="grey90")+  
+  # geom_sina(colour ="grey55", size =.4)+  
+  geom_line() +
+  ylab("mean trust value")  +
+  guides(x = "axis_nested") +
+  #  scale_colour_discrete(
+  #   labels = c("1" = "Highest and Lowest Trust Divergence (measured by \u03c3)",
+  #              "0" = "\u03c3 of Mean Trust Value")
+  # )
+  theme_light() +
+theme(legend.position = "none")  +
+  scale_colour_grey(start=0.8, end=0.2)#+
+```
+# H1: Individual differences account for the divergence of trust in automation
+
+## Build Linear Models for H1
+
+To investigate factors contributing to the divergence in the above figure, multiple linear mixed effect modelswere built to idenitfy random and fixed effects for predicting trust. The fixed effects observe interactions between variables that are consistent across a population, whereas random effects account for random variation of factors which are accounted for by their intercepts and slopes. 
+
+Metrics for evaluating goodness of fit:
+1. RMSE
+2. Akaike Information Criterion
+3. Bayesian Information Criterion
+4. Marginal R2
+5. Conditional R2
+
+## Investigate the best Linear Mixed Effects Model (LMEM)
+
+```{r}
+#trust = reliability/propensity
+ML1.lame = lme4::lmer(mean_trust_value ~ (reliability|propensity_value),
+   data = f.df)
+
+#trust = 1/propensity
+ML2.lame = lme4::lmer(mean_trust_value ~ (1|propensity_value),
+   data = f.df)
+
+#trust = complacency + exposure + (reliability/propensity)
+ML3.lame = lme4::lmer(mean_trust_value ~ complacency_value + exposure + (reliability|propensity_value), 
+    data = f.df)
+   
+#trust = reliability + exposure + (reliability/propensity)
+ML4.lame = lme4::lmer(mean_trust_value ~ reliability + exposure + (reliability|propensity_value),
+   data = f.df)
+   
+   #trust = reliability*exposure + (reliability/propensity)
+ML5.lame = lme4::lmer(mean_trust_value ~ reliability*exposure+ (reliability|propensity_value),
+   data = f.df)
+   
+   
+trust.table = compare_performance(ML1.lame,ML2.lame, ML3.lame,ML4.lame, ML5.lame,rank = TRUE)
+trust.table
+
+```
+
+## Select Best Performing LMEM based on the metrics
+
+```{r}
+BEST.lame = lme4::lmer(mean_trust_value ~ reliability*exposure + (reliability|propensity_value),
+data = f.df) 
+
+summary(BEST.lame)## Report 
+
+report(BEST.lame)
+
+```
+
+
+## Investigate whether individual measures correlated with trust
+
+```{r}
+prop = f.df %>%
+  group_by(ID, reliability) %>%
+  dplyr::select(propensity_value, mean_trust_value, reliability) %>%
+  summarise(propensity_value, trust = mean(mean_trust_value, na.rm = TRUE), reliability) %>%
+  distinct()
+
+rel= f.df %>%
+  group_by(ID) %>%
+  dplyr::select(reliability, mean_trust_value, reliability) %>%
+  summarise(reliability, trust = mean(mean_trust_value, na.rm = TRUE)) %>%
+  distinct()
+
+exp= f.df %>%
+  group_by(ID) %>%
+  dplyr::select(exposure, mean_trust_value) %>%
+  summarise(exposure, trust = mean(mean_trust_value, na.rm = TRUE)) %>%
+  distinct()
+
+
+lcomp.plot = ggplot(comp, aes(complacency_value, trust))  +
+  #facet_grid(~reliability) +
+  geom_point() +
+  coord_equal(xlim = c(2,7), ylim = c(2,7)) +  
+  geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  + 
+  ylab("mean trust value")
+
+# 
+# ggplot(df,aes(x = wt, y = hp)) + 
+#   geom_point() + 
+#   geom_smooth(method = "lm", se=FALSE) +
+#   geom_text(x = 2, y = 300, label = eq(df$wt,df$hp), parse = TRUE)
+
+ecomp.plot = ggplot(eff, aes(efficacy_value, trust))  +
+  #facet_grid(~reliability) +
+  geom_point() +
+  coord_equal(xlim = c(2,7), ylim = c(2,7)) +  
+  geom_smooth(method='lm', se = FALSE) +
+  stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  + 
+  ylab("mean trust value")
+
+tcomp.plot = ggplot(prop, aes(propensity_value, trust))  +
+  #facet_grid(~reliability) +
+  geom_point() +
+  coord_equal(xlim = c(2,7), ylim = c(2,7)) +  
+  geom_smooth(method='lm', se = FALSE) +
+  stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               )  + 
+  ylab("mean trust value")
+
+change.df = f.df %>% 
+  group_by(ID, reliability, propensity_value) %>%
+  summarise(trust = mean(mean_trust_value, na.rm = TRUE), ID, reliability, propensity_value, complacency_value, efficacy_value) %>%
+  distinct() %>%
+  pivot_wider(names_from = reliability, values_from = trust) %>%
+  mutate(trust_diff = high-low)
+
+#change.df
+
+changep.plot = ggplot(change.df, aes(propensity_value, trust_diff)) +
+  geom_point() +
+     geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               ) 
+
+changec.plot = ggplot(change.df, aes(complacency_value, trust_diff)) +
+  geom_point() +
+   geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               ) 
+
+changeE.plot = ggplot(change.df, aes(efficacy_value, trust_diff)) +
+  geom_point() +
+    geom_smooth(method='lm', se = FALSE) +
+   stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+               formula = formula, parse = TRUE,
+               label.x = .8, label.y = .8 # scale 0-1 relative coordinates
+               ) 
+#no correlation between propensity and drop in trust 
+
+
+lcomp.plot
+ecomp.plot
+tcomp.plot
+changep.plot
+changec.plot
+changeE.plot
+
+```
+
+
+# H2: Reliability and exposure account for differences in participants diverging trust in automation
+
+
+The effect of reliability [low] is statistically significant and negative with respect to the effect of high reliability. 
+
+(beta = -1.18, 95% CI [-1.62, -0.73], t(181) = -5.22, p < .001; Std. beta = -0.86, 95% CI [-1.18, -0.54])
+
+The effect of exposure [2] is statistically significant and positive with respect to exposure 1 (beta = 0.29, 95% CI [0.07, 0.50], t(181) = 2.61, p = 0.009; Std. beta = 0.21, 95% CI [0.05, 0.37])
+
+The interaction effect of exposure [2] to reliability [low] is statistically significant and negative (beta = -0.92, 95% CI [-1.29, -0.55], t(181) = -4.86, p < .001; Std. beta = -0.67, 95% CI [-0.94, -0.40])
+
+# H3: Trust is a dynamic system. The combination of individual context, automation characteristics and experience and the interaction between the three factors account for the differences in the participant's divering trust in automation
+
+Since having the slope and intercept effect did improve the model performance, we provide support for H3 that a combination of individual differences and experimental conditions influences trust outcomes. 
+
